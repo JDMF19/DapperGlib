@@ -302,6 +302,17 @@ List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
 ```
 > output sql: select * from Actors where LastName = 'Depp' and (Films > 10 or Name = 'Robert Downey Jr.')
 
+you can do the same with the OrWhere method
+
+```C#
+List<Actor> Actors = Actor.Where("LastName", "Depp").OrWhere((Builder) =>
+{
+    return Builder.Where("Films", ">", 10).OrWhere("Name", "Robert Downey Jr.");
+}).ToList();
+```
+
+> output sql: select * from Actors where LastName = 'Depp' or (Films > 10 or Name = 'Robert Downey Jr.')
+
 ### #Update Statements
 The query builder can also update existing records using the update method with passing an anonymous object.
 
@@ -339,8 +350,8 @@ List<Actor> Actors = Actor.InRandomOrder().ToList();
 You may use the **Take** methods to limit the number of results returned from the query and to skip a given number of results in the query:
 
 ```C#
-List<Actor> Actors = Actor.Take(10).ToList(); # returns the top 10 actors
-List<Actor> Actors = Actor.Take(10,10).ToList(); # returns the next 10 actors skipping the previous 10
+List<Actor> Actors = Actor.Take(10).ToList(); // returns the top 10 actors
+List<Actor> Actors = Actor.Take(10,10).ToList(); // returns the next 10 actors skipping the previous 10
 ```
 > #### The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
 
