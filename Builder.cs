@@ -63,7 +63,7 @@ namespace DapperGlib
             return Regex.Replace(Query.ToString(),@"\s+"," ").Trim();
         }
 
-        internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator)
+        internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator, bool Reverse = false)
         {
             AddWhereClause();
 
@@ -74,7 +74,15 @@ namespace DapperGlib
 
             var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
 
-            string ExtraCondition = $" ( {SBuilder.GetQuery().Split("WHERE")[1]} ) ";
+            string reverse = "";
+
+            if (Reverse)
+            {
+                reverse = LogicalOperators.NOT.ToString();
+            }
+
+
+            string ExtraCondition = $" {reverse} ( {SBuilder.GetQuery().Split("WHERE")[1]} ) ";
 
             foreach (var item in SBuilder.SubQueries)
             {
@@ -87,36 +95,37 @@ namespace DapperGlib
         internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null)
         {
 
-            PropertyInfo? columnProp = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable)) && prop.Name == Column).FirstOrDefault();
+            //PropertyInfo? columnProp = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable)) && prop.Name == Column).FirstOrDefault();
 
-            try
-            {
-                // var val = (Value != null && !IgnoreCast) ? Convert.ChangeType(Value, columnProp.PropertyType) : Value;
 
-                LogicalOperators Op = logicalOperators != null ? (LogicalOperators)logicalOperators : LogicalOperators.AND;
+            LogicalOperators Op = logicalOperators != null ? (LogicalOperators)logicalOperators : LogicalOperators.AND;
 
-                if (ComparisonOperator != null)
-                {
-                    AddCondition(Column, ComparisonOperator, Value, Op);
-                }
-                else
-                {
-                    AddCondition(Column, "=", Value, Op);
-                }
+            if (ComparisonOperator != null)
+            {
+                AddCondition(Column, ComparisonOperator, Value, Op);
+            }
+            else
+            {
+                AddCondition(Column, "=", Value, Op);
+            }
 
-            }
-            catch (NullReferenceException)
-            {
-                throw new NullReferenceException("Column not found on fillable props");
-            }
-            catch (FormatException)
-            {
-                throw new FormatException("Column value not match with column type");
-            }
-            catch (InvalidCastException)
-            {
-                throw new FormatException("Column value not match with column type");
-            }
+            //try
+            //{
+
+
+            //}
+            //catch (NullReferenceException)
+            //{
+            //    throw new NullReferenceException("Column not found on fillable props");
+            //}
+            //catch (FormatException)
+            //{
+            //    throw new FormatException("Column value not match with column type");
+            //}
+            //catch (InvalidCastException)
+            //{
+            //    throw new FormatException("Column value not match with column type");
+            //}
 
         }
 
@@ -264,6 +273,8 @@ namespace DapperGlib
                         Query.Append($" {logicalOperators.ToString()} {Table}.{Column} {NotValue} ");
 
                         break;
+
+                    case LogicalOperators.NOT_BETWEEN:
                     case LogicalOperators.BETWEEN:
 
                         if (Value != null)
@@ -278,7 +289,15 @@ namespace DapperGlib
                             var from = FormatValue(obj.From);
                             var to = FormatValue(obj.To);
 
-                            Query.Append($" {Table}.{Column} {logicalOperators.ToString()} {from} {LogicalOperators.AND.ToString()} {to} ");
+                            if (logicalOperators == LogicalOperators.NOT_BETWEEN)
+                            {
+                                Query.Append($" {LogicalOperators.NOT} ({Table}.{Column} {LogicalOperators.BETWEEN.ToString()} {from} {LogicalOperators.AND.ToString()} {to}) ");
+                            }
+                            else
+                            {
+                                Query.Append($" {Table}.{Column} {logicalOperators.ToString()} {from} {LogicalOperators.AND.ToString()} {to} ");
+
+                            }
 
                         }
 
@@ -331,7 +350,7 @@ namespace DapperGlib
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
 
-                        Query.Append($" {Table}.{Column} = {Table}.{Value} ");
+                        Query.Append($" {Table}.{Column} {ComparisonOperator} {Table}.{Value} ");
 
                         break;
                     default:

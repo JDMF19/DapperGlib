@@ -53,6 +53,18 @@ namespace DapperGlib
             return this;
         }
 
+        public SubQuery<TModel> WhereNot(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
+        {
+            GroupCondition(Builder, LogicalOperators.AND, true);
+            return this;
+        }
+
+        public SubQuery<TModel> OrWhereNot(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
+        {
+            GroupCondition(Builder, LogicalOperators.OR, true);
+            return this;
+        }
+
         public SubQuery<TModel> WhereIn(string Column, object[] Values)
         {
 
@@ -111,9 +123,21 @@ namespace DapperGlib
             return this;
         }
 
+        public SubQuery<TModel> WhereColumn(string FirstColumn, string ComparisonOperator, string SecondColumn)
+        {
+            InitWhere(FirstColumn, SecondColumn, ComparisonOperator, LogicalOperators.COLUMN);
+            return this;
+        }
+
         public SubQuery<TModel> WhereBetween(string Column, Between Value)
         {
             InitWhere(Column, Value, null, LogicalOperators.BETWEEN);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereNotBetween(string Column, Between Value)
+        {
+            InitWhere(Column, Value, null, LogicalOperators.NOT_BETWEEN);
             return this;
         }
 

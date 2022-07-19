@@ -380,6 +380,18 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereNot(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
+        {
+            GroupCondition(Builder, LogicalOperators.AND, true);
+            return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereNot(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
+        {
+            GroupCondition(Builder, LogicalOperators.OR, true);
+            return this;
+        }
+
         public QueryBuilder<TModel> WhereIn(string Column, object[] Values)
         {
 
@@ -438,9 +450,21 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereColumn(string FirstColumn, string ComparisonOperator, string SecondColumn)
+        {
+            InitWhere(FirstColumn, SecondColumn, ComparisonOperator, LogicalOperators.COLUMN);
+            return this;
+        }
+
         public QueryBuilder<TModel> WhereBetween(string Column, Between Value)
         {
             InitWhere(Column, Value, null, LogicalOperators.BETWEEN);
+            return this;
+        }
+
+        public QueryBuilder<TModel> WhereNotBetween(string Column, Between Value)
+        {
+            InitWhere(Column, Value, null, LogicalOperators.NOT_BETWEEN);
             return this;
         }
 
@@ -553,15 +577,20 @@ namespace DapperGlib
 
             string ClauseName = string.Join(" ", Clauses.ORDER_BY.ToString().Split("_"));
 
-            if (!Query.ToString().Contains(ClauseName))
+            if (Query.ToString().Contains(ClauseName))
             {
-                Query.Append($" {ClauseName} {Column} ");
+                Query.Append($", ");
+            }
+            else
+            {
+                Query.Append($" {ClauseName} ");
+            }
 
-                if (Direction != null)
-                {
-                    Query.Append($" {Direction} ");
-                }
+            Query.Append($" {Column} ");
 
+            if (Direction != null)
+            {
+                Query.Append($" {Direction} ");
             }
         }
 

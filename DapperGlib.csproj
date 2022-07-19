@@ -10,6 +10,7 @@
     <PackageTags>Dapper;Database;</PackageTags>
     <Authors>JDMF19</Authors>
     <Version>1.0.1</Version>
+    <Description>An easy way to interact with the database using Dapper inspired by Laravel</Description>
   </PropertyGroup>
 
   <ItemGroup>

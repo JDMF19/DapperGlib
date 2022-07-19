@@ -52,6 +52,17 @@ namespace DapperGlib
             return Model<T>.Find(LastId) ?? (new());
         }
 
+
+        public static void UpdateAll(dynamic args)
+        {
+            new QueryBuilder<T>().Update(args);
+        }
+
+        public static Task<int> UpdateAllAsync(dynamic args)
+        {
+           return new QueryBuilder<T>().UpdateAsync(args);
+        }
+
         public void Update()
         {
             var Builder = new QueryBuilder<T>().UpdateQuery(this);
@@ -245,6 +256,15 @@ namespace DapperGlib
             return Builder_;
         }
 
+        public static QueryBuilder<T> WhereNot(Func<SubQuery<T>, SubQuery<T>> Builder)
+        {
+            QueryBuilder<T> Builder_ = new QueryBuilder<T>();
+
+            Builder_.WhereNot(Builder);
+
+            return Builder_;
+        }
+
         public static QueryBuilder<T> WhereIn(string Column, object[] Values)
         {
 
@@ -305,9 +325,22 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereColumn(string FirstColumn, string ComparisonOperator, string SecondColumn)
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereColumn(FirstColumn, ComparisonOperator, SecondColumn);
+
+            return Builder;
+        }
+
         public static QueryBuilder<T> WhereBetween(string Column, Between Value)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereBetween(Column, Value);
+            return Builder;
+        }
+
+        public static QueryBuilder<T> WhereNotBetween(string Column, Between Value)
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereNotBetween(Column, Value);
             return Builder;
         }
 
