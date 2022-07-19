@@ -455,3 +455,37 @@ List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId"), (Bu
     return Builder.Where("Likes", ">", 100);
 }).ToList();
 ```
+
+## Still is Dapper
+Of course you can still use dapper's interface by instantiating the context
+
+```C#
+using Dapper;
+using DapperGlib;
+
+GlipContext _context = new();
+
+using var conection = _context.CreateConnection();
+var users = conection.Query<User>("SELECT * FROM Users");
+
+```
+
+### #Transactions
+You can use transactions in the same way
+
+```C#
+using System.Transactions;
+
+
+using (var transactionScope = new TransactionScope())
+{
+    User.Create(new()
+    {
+        Name = "Patric",
+        LastName = "Jonh"
+    });
+
+    transactionScope.Complete();
+}
+
+```
