@@ -1,4 +1,3 @@
-> ## This is a beta phase of the project, it is still under construction!!
 
 ## Dapper.DapperGlib
 
@@ -133,7 +132,7 @@ NewActor.LastName = "Hanks";
 NewActor.Update(); 
 
 ```
-If you want to update only specific properties you can pass an anonymous object to the Update function
+If you want to update only specific properties you can pass an anonymous object to the Update method
 
 ```C#
 NewActor.Update(new
@@ -293,7 +292,7 @@ List<Actor> Actors = Actor.WhereColumn("Name", "LastName").ToList();
 
 #### #Logical Grouping
 
-Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a Func to the where method:
+Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a closure to the where method:
 
 ```C#
 List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
@@ -303,6 +302,33 @@ List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
 ```
 > output sql: select * from Actors where LastName = 'Depp' and (Films > 10 or Name = 'Robert Downey Jr.')
 
+you can do the same with the OrWhere method
+
+```C#
+List<Actor> Actors = Actor.Where("LastName", "Depp").OrWhere((Builder) =>
+{
+    return Builder.Where("Films", ">", 10).OrWhere("Name", "Robert Downey Jr.");
+}).ToList();
+```
+
+> output sql: select * from Actors where LastName = 'Depp' or (Films > 10 or Name = 'Robert Downey Jr.')
+
+### #Mass Updates
+Updates can also be performed against models that match a given query using the update method with passing an anonymous object.  
+In this example, all actors that have a destination of San Diego will be updated:
+
+```C#
+Actor.Where("Destination", "San Diego").Update(new {
+    ToTheBeach = true
+});
+```
+
+### #Mass Delete
+The query builder's delete method may be used to delete records from the table. You may constrain delete statements by adding "where" clauses before calling the delete method:
+
+```C#
+Actor.Where("Name", "Tom").Delete();
+```
 
 ### #Ordering, Limit & Offset
 
@@ -325,8 +351,8 @@ List<Actor> Actors = Actor.InRandomOrder().ToList();
 You may use the **Take** methods to limit the number of results returned from the query and to skip a given number of results in the query:
 
 ```C#
-List<Actor> Actors = Actor.Take(10).ToList(); # returns the top 10 actors
-List<Actor> Actors = Actor.Take(10,10).ToList(); # returns the next 10 actors skipping the previous 10
+List<Actor> Actors = Actor.Take(10).ToList(); // returns the top 10 actors
+List<Actor> Actors = Actor.Take(10,10).ToList(); // returns the next 10 actors skipping the previous 10
 ```
 > #### The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
 
@@ -414,6 +440,13 @@ var user = User.Find(3);
 List<Comment> Comments = user.Comments.Where("Likes", ">", 50).ToList();
 ```
 
+You can also use the **WithCount** method to order by the number of records in a related table.
+
+```C#
+var users = User.WithCount("Comments").OrderBy("Comments_Count").ToList();
+```
+> **Note: The string passed to the WithCount method must be the name of a relationship property in the model**
+
 ### #Querying Relationship Existence
 
 When retrieving model records, you may wish to limit your results based on the existence of a relationship. For these cases use **WhereHas** method
@@ -428,7 +461,7 @@ You may also specify an operator and count value to further customize the query:
 // Retrieve all users that have three or more comments...
 List<User> Users = User.WhereHas(new Relationship<Comment>("UserId"), ">=", 3).ToList();
 ```
-If you need even more power, you may pass a `Func` to define additional query constraints on your queries, such as validate the Likes of a comment:
+If you need even more power, you may pass a `closure` to define additional query constraints on your queries, such as validate the Likes of a comment:
 
 ```C#
 // Retrieve all users that have one or more comments with Likes over 100...
@@ -448,11 +481,45 @@ When retrieving model records, you may wish to limit your results based on the a
 //Retrieve all users that not have comments...
 List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId")).ToList();
 ```
-you can also pass a `Func` to add an additional constraint
+you can also pass a `closure` to add an additional constraint
 
 ```C#
 // Retrieve all users that not have comments with Likes over 100...
 List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId"), (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
+```
+
+## Still is Dapper
+Of course you can still use dapper's interface by instantiating the context
+
+```C#
+using Dapper;
+using DapperGlib;
+
+GlipContext _context = new();
+
+using var conection = _context.CreateConnection();
+var users = conection.Query<User>("SELECT * FROM Users");
+
+```
+
+### #Transactions
+You can use transactions in the same way
+
+```C#
+using System.Transactions;
+
+
+using (var transactionScope = new TransactionScope())
+{
+    User.Create(new()
+    {
+        Name = "Patric",
+        LastName = "Jonh"
+    });
+
+    transactionScope.Complete();
+}
+
 ```
