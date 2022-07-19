@@ -132,7 +132,7 @@ NewActor.LastName = "Hanks";
 NewActor.Update(); 
 
 ```
-If you want to update only specific properties you can pass an anonymous object to the Update function
+If you want to update only specific properties you can pass an anonymous object to the Update method
 
 ```C#
 NewActor.Update(new
@@ -302,6 +302,21 @@ List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
 ```
 > output sql: select * from Actors where LastName = 'Depp' and (Films > 10 or Name = 'Robert Downey Jr.')
 
+### #Update Statements
+The query builder can also update existing records using the update method with passing an anonymous object.
+
+```C#
+Actor.Where("ActorId", 50).Update(new {
+    Name = "Ryan"
+});
+```
+
+### #Delete Statements
+The query builder's delete method may be used to delete records from the table. You may constrain delete statements by adding "where" clauses before calling the delete method:
+
+```C#
+Actor.Where("Name", "Tom").Delete();
+```
 
 ### #Ordering, Limit & Offset
 
@@ -412,6 +427,13 @@ Since all relationships also serve as query builders, you may add further constr
 var user = User.Find(3);
 List<Comment> Comments = user.Comments.Where("Likes", ">", 50).ToList();
 ```
+
+You can also use the **WithCount** method to order by the number of records in a related table.
+
+```C#
+var users = User.WithCount("Comments").OrderBy("Comments_Count").ToList();
+```
+> **Note: The string passed to the WithCount method must be the name of a relationship property in the model**
 
 ### #Querying Relationship Existence
 
