@@ -293,7 +293,7 @@ List<Actor> Actors = Actor.WhereColumn("Name", "LastName").ToList();
 
 #### #Logical Grouping
 
-Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a Func to the where method:
+Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a closure to the where method:
 
 ```C#
 List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
@@ -428,7 +428,7 @@ You may also specify an operator and count value to further customize the query:
 // Retrieve all users that have three or more comments...
 List<User> Users = User.WhereHas(new Relationship<Comment>("UserId"), ">=", 3).ToList();
 ```
-If you need even more power, you may pass a `Func` to define additional query constraints on your queries, such as validate the Likes of a comment:
+If you need even more power, you may pass a `closure` to define additional query constraints on your queries, such as validate the Likes of a comment:
 
 ```C#
 // Retrieve all users that have one or more comments with Likes over 100...
@@ -448,7 +448,7 @@ When retrieving model records, you may wish to limit your results based on the a
 //Retrieve all users that not have comments...
 List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId")).ToList();
 ```
-you can also pass a `Func` to add an additional constraint
+you can also pass a `closure` to add an additional constraint
 
 ```C#
 // Retrieve all users that not have comments with Likes over 100...
