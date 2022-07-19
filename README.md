@@ -1,5 +1,5 @@
 
-## Dapper.DapperGlib
+## DapperGlib
 
 ### Introduction
 
