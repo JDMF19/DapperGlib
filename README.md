@@ -207,26 +207,36 @@ var actors = Actor.Where("Name","Tom").OrWhere("Name", "Keanu").ToList();
 
 #### #Additional Where Clauses
 
-> WhereBetween / WhereDateBetween
+> WhereBetween / WhereNotBetween / WhereDateBetween
 
 The **WhereBetween** method verifies that a column's value is between two values.  
 Receives two parameters, the first is the column's name and the second is an instance of the **DapperGlib.Util.Between** class which only has **From** and **To** properties
 
 ```C#
-List<Actor> Actors = Actor.WhereBetween("Films", new()
-{
-    From = 5,
-    To = 10
-}).ToList();
+List<Actor> Actors = Actor.WhereBetween("Films", new() { From = 5, To = 10 }).ToList();
 ```
+
+The **WhereNotBetween** method verifies that a column's value lies outside of two values:
+
+```C#
+List<Actor> Actors = Actor.WhereNotBetween("Films", new() { From = 5, To = 10 }).ToList();
+```
+
 The **WhereDateBetween** method verifies that a column's value is between two Dates.  
 Receives two parameters, the first is the column's name and the second is an instance of the **DapperGlib.Util.DateBetween** class which only has **From** and **To** properties
 
 ```C#
-List<Actor> Actors = Actor.WhereDateBetween("Birthday", new()
+List<Actor> Actors = Actor.WhereDateBetween("Birthday", new() { From = "1956-07-09", To = "1996-06-01" }).ToList();
+```
+
+> WhereNot / OrWhereNot  
+
+The **WhereNot** and **OrWhereNot** methods may be used to negate a given group of query constraints
+
+```C#
+List<Actor> Actors = Actor.WhereNot((Builder) =>
 {
-    From = "1956-07-09",
-    To = "1996-06-01"
+    return Builder.Where("Films", ">", 10);
 }).ToList();
 ```
 
@@ -288,6 +298,13 @@ The **WhereColumn** method may be used to verify that two columns are equal:
 ```C#
 List<Actor> Actors = Actor.WhereColumn("Name", "LastName").ToList();
 ```
+
+You may also pass a comparison operator to the whereColumn method:
+
+```C#
+List<Actor> Actors = Actor.WhereColumn("Name", "!=", "LastName").ToList();
+```
+
 > **Note: The columns must be of the same type**
 
 #### #Logical Grouping
@@ -341,6 +358,13 @@ List<Actor> Actors = Actor.OrderBy("Name").ToList();
 
 List<Actor> Actors = Actor.OrderBy("Name", "DESC").ToList();
 ```
+
+To sort by multiple columns, you may simply invoke orderBy as many times as necessary:
+
+```C#
+List<Actor> Actors = Actor.OrderBy("Name").OrderBy("LastName").ToList();
+```
+
 you can also randomize them using method **InRandomOrder**
 
 ```C#
