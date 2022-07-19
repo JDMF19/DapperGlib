@@ -1,4 +1,3 @@
-> ## This is a beta phase of the project, it is still under construction!!
 
 ## Dapper.DapperGlib
 
