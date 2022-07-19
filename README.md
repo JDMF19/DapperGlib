@@ -313,16 +313,17 @@ List<Actor> Actors = Actor.Where("LastName", "Depp").OrWhere((Builder) =>
 
 > output sql: select * from Actors where LastName = 'Depp' or (Films > 10 or Name = 'Robert Downey Jr.')
 
-### #Update Statements
-The query builder can also update existing records using the update method with passing an anonymous object.
+### #Mass Updates
+Updates can also be performed against models that match a given query using the update method with passing an anonymous object.  
+In this example, all actors that have a destination of San Diego will be updated:
 
 ```C#
-Actor.Where("ActorId", 50).Update(new {
-    Name = "Ryan"
+Actor.Where("Destination", "San Diego").Update(new {
+    ToTheBeach = true
 });
 ```
 
-### #Delete Statements
+### #Mass Delete
 The query builder's delete method may be used to delete records from the table. You may constrain delete statements by adding "where" clauses before calling the delete method:
 
 ```C#
