@@ -152,7 +152,7 @@ List<User> Users = User.ToList();
 ```
 
 #### #Retrieving A Single Row / Column From A Table
-If you just need to retrieve a single row from a database table, you may use first method:
+If you just need to retrieve a single row from a database table, you may use **First** method:
 
 ```C#
 User user = User.First();
@@ -276,25 +276,25 @@ var users = User.WhereNotNull("LastName").ToList();
 The **WhereDate** method may be used to compare a column's value against a date:
 
 ```C#
-var users = User.WhereDate("LastFilmDate", "2022-07-01").ToList();
+var users = User.WhereDate("Birthday", "2022-07-01").ToList();
 ```
 
 The **WhereYear** method may be used to compare a column's value against a specific year:
 
 ```C#
-var users = User.WhereYear("LastFilmDate", "2022").ToList();
+var users = User.WhereYear("Birthday", "2022").ToList();
 ```
 
 The **WhereMonth** method may be used to compare a column's value against a specific month:
 
 ```C#
-var users = User.WhereMonth("LastFilmDate", "07").ToList();
+var users = User.WhereMonth("Birthday", "07").ToList();
 ```
 
 The **WhereDay** method may be used to compare a column's value against a specific day of the month:
 
 ```C#
-var users = User.WhereDay("LastFilmDate", "01").ToList();
+var users = User.WhereDay("Birthday", "01").ToList();
 ```
 
 > WhereColumn
@@ -318,23 +318,23 @@ var users = User.WhereColumn("Name", "!=", "LastName").ToList();
 Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a closure to the where method:
 
 ```C#
-var users = User.Where("LastName", "Depp").Where((Builder) =>
+var users = User.Where("Votes", ">", 100).Where((Builder) =>
 {
     return Builder.Where("Votes", ">", 10).OrWhere("Name", "Robert Downey Jr.");
 }).ToList();
 ```
-> output sql: select * from Users where LastName = 'Depp' and (Votes > 10 or Name = 'Robert Downey Jr.')
+> output sql: select * from Users where Votes > 100 and (Votes > 10 or Name = 'Robert Downey Jr.') 
 
 you can do the same with the OrWhere method
 
 ```C#
-var users = User.Where("LastName", "Depp").OrWhere((Builder) =>
+var users = User.Where("Votes", ">", 100).OrWhere((Builder) =>
 {
-    return Builder.Where("Votes", ">", 10).OrWhere("Name", "Robert Downey Jr.");
+    return Builder.Where("Votes", ">", 10).Where("Name", "Abigail");
 }).ToList();
 ```
 
-> output sql: select * from Users where LastName = 'Depp' or (Votes > 10 or Name = 'Robert Downey Jr.')
+> output sql: select * from Users where Votes > 100 or (Votes > 10 and Name = 'Abigail')
 
 ### #Mass Updates
 Updates can also be performed against models that match a given query using the update method with passing an anonymous object.  
@@ -378,11 +378,12 @@ var users = User.InRandomOrder().ToList();
 ```
 
 #### #Limit & Offset
-You may use the **Take** methods to limit the number of results returned from the query and to skip a given number of results in the query:
+You may use the **Skip** and **Take** methods to limit the number of results returned from the query or to skip a given number of results in the query:
 
 ```C#
 var users = User.Take(10).ToList(); // returns the top 10 users
-var users = User.Take(10,10).ToList(); // returns the next 10 users skipping the previous 10
+var users = User.Skip(10).ToList(); // returns all users skipping the previous 10
+var users = User.Skip(10).Take(10).ToList(); // returns the next 10 users skipping the previous 10
 ```
 > #### The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
 
