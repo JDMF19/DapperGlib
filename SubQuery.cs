@@ -147,19 +147,25 @@ namespace DapperGlib
             return this;
         }
 
-        public SubQuery<TModel> WhereHas<TRelationship>(Relationship<TRelationship> Relationship, string ComparisonOperator, int Value)
+        public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
-            WhereHasBuilder(Clauses.EXISTS, Relationship, null, ComparisonOperator, Value);
+            WhereHasBuilder(Clauses.EXISTS, Relationship, Builder);
             return this;
         }
 
-        public SubQuery<TModel> WhereHas<TRelationship>(Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
+        public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
+        {
+            WhereHasBuilder<TRelationship>(Clauses.EXISTS, Relationship, null, ComparisonOperator, Value);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
         {
             WhereHasBuilder(Clauses.EXISTS, Relationship, Builder, ComparisonOperator, Value);
             return this;
         }
 
-        public SubQuery<TModel> WhereDoesntHave<TRelationship>(Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        public SubQuery<TModel> WhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
             WhereHasBuilder(Clauses.NOT_EXISTS, Relationship, Builder);
             return this;

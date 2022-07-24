@@ -13,6 +13,9 @@ namespace DapperGlib
 
         internal StringBuilder Query { get; set; } = new StringBuilder();
         internal List<object> SubQueries { get; set; } = new();
+        internal List<string> CountsRelationship { get; set; } = new();
+        internal string? SkipString { get; set; }
+        internal string? TakeString { get; set; }
 
         internal int ConditionsAdded = 0;
 
@@ -55,6 +58,24 @@ namespace DapperGlib
 
                 Query.Replace(index, squery);
                 i++;
+            }
+
+            int j = 1;
+            foreach (string countQuery in CountsRelationship)
+            {
+                string index = $"count_relationship_{j}";
+                Query.Replace(index, countQuery);
+                j++;
+            }
+
+            if (SkipString != null)
+            {
+                Query.Replace("skip_string", SkipString);
+            }
+
+            if (TakeString != null)
+            {
+                Query.Replace("take_string", TakeString);
             }
 
             Query.Replace("_selector_all", "*");
@@ -129,11 +150,28 @@ namespace DapperGlib
 
         }
 
-        internal void WhereHasBuilder<TRelationship>(Clauses Clause, Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
+        internal void WhereHasBuilder<TRelationship>(Clauses Clause, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
         {
             if (!HasOrderClause())
             {
+
                 var ReturnInstance = Activator.CreateInstance(typeof(TRelationship))!;
+
+                var property = Instance.GetType().GetProperty(Relationship);
+
+                if (property == null)
+                {
+                    throw new NullReferenceException("Relationship property not found on Model");
+                }
+
+                var propertyValue = property.GetValue(Instance);
+
+                if (propertyValue == null)
+                {
+                    throw new NullReferenceException("Relationship property not has a Relationship value");
+                }
+
+                Relationship<TRelationship> relationship = (Relationship<TRelationship>)propertyValue;
 
                 AddWhereClause();
 
@@ -145,17 +183,16 @@ namespace DapperGlib
                 string Table = GetTableName(ReturnInstance);
                 string OwnTable = GetTableName();
 
-                SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{Relationship.ForeignKey} = {OwnTable}.{Relationship.LocalKey} ", Clause);
+                SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{relationship.ForeignKey} = {OwnTable}.{relationship.LocalKey} ", Clause);
 
                 if (ComparisonOperator != null && Value != null)
                 {
-                    SubQueryRelationship.Query = new(SubQueryRelationship.Query.ToString().Replace("_selector_all", "_selector_count"));
+                    SubQueryRelationship.Query = new StringBuilder(SubQueryRelationship.Query.ToString().Replace("_selector_all", "_selector_count"));
 
                     SubQueryRelationship.AsCondition = true;
                     SubQueryRelationship.ConditionOperator = ComparisonOperator;
                     SubQueryRelationship.ConditionValue = Value;
                 }
-
 
                 SubQueries.Add(SubQueryRelationship);
 
@@ -163,7 +200,8 @@ namespace DapperGlib
 
                 if (Builder != null)
                 {
-                    var SBuilder = Builder.Invoke(new SubQuery<TRelationship>("",Clause));
+
+                    var SBuilder = Builder.Invoke(new("", Clause));
 
                     string ExtraCondition = $"{LogicalOperators.AND} {SBuilder.GetQuery().Split("WHERE")[1]}";
 
@@ -180,6 +218,58 @@ namespace DapperGlib
             }
 
         }
+
+        //internal void WhereHasBuilder<TRelationship>(Clauses Clause, Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
+        //{
+        //    if (!HasOrderClause())
+        //    {
+        //        var ReturnInstance = Activator.CreateInstance(typeof(TRelationship))!;
+
+        //        AddWhereClause();
+
+        //        if (ConditionsAdded != 0)
+        //        {
+        //            Query.Append($" {LogicalOperators.AND} ");
+        //        }
+
+        //        string Table = GetTableName(ReturnInstance);
+        //        string OwnTable = GetTableName();
+
+        //        SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{Relationship.ForeignKey} = {OwnTable}.{Relationship.LocalKey} ", Clause);
+
+        //        if (ComparisonOperator != null && Value != null)
+        //        {
+        //            SubQueryRelationship.Query = new(SubQueryRelationship.Query.ToString().Replace("_selector_all", "_selector_count"));
+
+        //            SubQueryRelationship.AsCondition = true;
+        //            SubQueryRelationship.ConditionOperator = ComparisonOperator;
+        //            SubQueryRelationship.ConditionValue = Value;
+        //        }
+
+
+        //        SubQueries.Add(SubQueryRelationship);
+
+        //        Query.Append($" SubQuery_{SubQueries.Count} ");
+
+        //        if (Builder != null)
+        //        {
+        //            var SBuilder = Builder.Invoke(new SubQuery<TRelationship>("",Clause));
+
+        //            string ExtraCondition = $"{LogicalOperators.AND} {SBuilder.GetQuery().Split("WHERE")[1]}";
+
+        //            foreach (var item in SBuilder.SubQueries)
+        //            {
+        //                SubQueryRelationship.SubQueries.Add(item);
+        //            }
+
+        //            SubQueryRelationship.Query.Append($" {ExtraCondition} ");
+
+        //        }
+
+        //        ConditionsAdded += 1;
+        //    }
+
+        //}
 
         internal void InitWhen(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {

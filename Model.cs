@@ -21,6 +21,7 @@ namespace DapperGlib
 
         }
 
+        #region CRUD
         public void Insert()
         {
 
@@ -52,7 +53,6 @@ namespace DapperGlib
             return Model<T>.Find(LastId) ?? (new());
         }
 
-
         public static void UpdateAll(dynamic args)
         {
             new QueryBuilder<T>().Update(args);
@@ -60,7 +60,7 @@ namespace DapperGlib
 
         public static Task<int> UpdateAllAsync(dynamic args)
         {
-           return new QueryBuilder<T>().UpdateAsync(args);
+            return new QueryBuilder<T>().UpdateAsync(args);
         }
 
         public void Update()
@@ -124,6 +124,9 @@ namespace DapperGlib
             return new QueryBuilder<T>().SimpleDeleteAsync(this);
         }
 
+        #endregion
+
+        #region Retrieving
         public static T First()
         {
             var Builder = new QueryBuilder<T>();
@@ -217,11 +220,52 @@ namespace DapperGlib
 
         }
 
-        public static QueryBuilder<T> Take(int Limit, int Offset = 0)
+        public static string Value(string Column)
+        {
+            var Builder = new QueryBuilder<T>();
+            return Builder.Value(Column);
+        }
+
+        public static double Max(string Column)
+        {
+            var Builder = new QueryBuilder<T>();
+            return Builder.Max(Column);
+        }
+
+        public static double Min(string Column)
+        {
+            var Builder = new QueryBuilder<T>();
+            return Builder.Min(Column);
+        }
+
+        public static double Avg(string Column)
+        {
+            var Builder = new QueryBuilder<T>();
+            return Builder.Avg(Column);
+        }
+        
+        public static double Sum(string Column)
+        {
+            var Builder = new QueryBuilder<T>();
+            return Builder.Sum(Column);
+        }
+        #endregion
+
+        public static QueryBuilder<T> Skip(int Rows)
         {
             var Builder = new QueryBuilder<T>().SimpleQuery();
 
-            Builder.Take(Limit, Offset);
+            Builder.Skip(Rows);
+
+            return Builder;
+
+        }
+
+        public static QueryBuilder<T> Take(int Rows)
+        {
+            var Builder = new QueryBuilder<T>().SimpleQuery();
+
+            Builder.Take(Rows);
 
             return Builder;
 
@@ -350,16 +394,7 @@ namespace DapperGlib
             return Builder;
         }
 
-        public static QueryBuilder<T> WhereHas<TRelationship>(Relationship<TRelationship> Relationship, string ComparisonOperator, int Value)
-        {
-            QueryBuilder<T> Builder_ = new QueryBuilder<T>("");
-
-            Builder_.WhereHas(Relationship, ComparisonOperator, Value);
-
-            return Builder_;
-        }
-
-        public static QueryBuilder<T> WhereHas<TRelationship>(Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        public static QueryBuilder<T> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
             QueryBuilder<T> Builder_ = new QueryBuilder<T>("");
 
@@ -368,7 +403,25 @@ namespace DapperGlib
             return Builder_;
         }
 
-        public static QueryBuilder<T> WhereDoesntHave<TRelationship>(Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        public static QueryBuilder<T> WhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
+        {
+            QueryBuilder<T> Builder_ = new QueryBuilder<T>("");
+
+            Builder_.WhereHas<TRelationship>(Relationship, ComparisonOperator, Value);
+
+            return Builder_;
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
+        {
+            QueryBuilder<T> Builder_ = new QueryBuilder<T>("");
+
+            Builder_.WhereHas(Relationship, Builder, ComparisonOperator, Value);
+
+            return Builder_;
+        }
+
+        public static QueryBuilder<T> WhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
             QueryBuilder<T> Builder_ = new QueryBuilder<T>("");
 
@@ -385,6 +438,20 @@ namespace DapperGlib
             Builder_.When(Condition, Builder);  
 
             return Builder_;
+        }
+
+        public static QueryBuilder<T> Distinct()
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().Distinct();
+
+            return Builder;
+        }
+
+        public static QueryBuilder<T> Distinct(string Columns)
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().Distinct(Columns);
+
+            return Builder;
         }
 
         public static QueryBuilder<T> WithCount(string Relationship)

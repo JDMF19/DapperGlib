@@ -342,7 +342,7 @@ In this example, all users that have a destination of San Diego will be updated:
 
 ```C#
 User.Where("Destination", "San Diego").Update(new {
-    delayed = 1
+    Delayed = 1
 });
 ```
 
