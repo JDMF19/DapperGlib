@@ -512,24 +512,26 @@ When retrieving model records, you may wish to limit your results based on the e
 
 ```C#
 //Retrieve all users that have at least one comment...
-var users = User.WhereHas(new Relationship<Comment>("UserId")).ToList();
+var users = User.WhereHas<Comment>("Comments").ToList();
 ```
+> **Note! The string passed to the WhereHas method must be the name of a relationship property in the model and you need to pass the Model type related**
+
 You may also specify an operator and count value to further customize the query:
 
 ```C#
 // Retrieve all users that have three or more comments...
-var users = User.WhereHas(new Relationship<Comment>("UserId"), ">=", 3).ToList();
+var users = User.WhereHas<Comment>("Comments", ">=", 3).ToList();
 ```
 If you need even more power, you may pass a `closure` to define additional query constraints on your queries, such as validate the Likes of a comment:
 
 ```C#
 // Retrieve all users that have one or more comments with Likes over 100...
-var users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereHas<Comment>("Comments", (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
 
 // Retrieve users with at least ten comments with Likes over 100...
-var users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereHas<Comment>("Comments", (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }, ">=", 10).ToList();
 ```
@@ -538,13 +540,13 @@ When retrieving model records, you may wish to limit your results based on the a
 
 ```C#
 //Retrieve all users that not have comments...
-var users = User.WhereDoesntHave(new Relationship<Comment>("UserId")).ToList();
+var users = User.WhereDoesntHave<Comment>("Comments").ToList();
 ```
 you can also pass a `closure` to add an additional constraint
 
 ```C#
 // Retrieve all users that not have comments with Likes over 100...
-var users = User.WhereDoesntHave(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereDoesntHave<Comment>("Comments", (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
 ```
