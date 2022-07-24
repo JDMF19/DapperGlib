@@ -33,24 +33,24 @@ using DapperGlib;
 
 namespace App.Models
 {
-    public class Actor : Model<Actor>
+    public class User : Model<User>
     {
-        public Actor()
+        public User()
         {
         }
     }
 }
 ```
 #### #Table Names
-After looking at the example above, you may have noticed that we didn't specify which database table corresponds to our **Actor** Model. This is because the name of the Class will be used as the name of the table **unless** another name is explicitly specified. So in this case it will be assumed that the **Actor** model stores records in the Actor table
+After looking at the example above, you may have noticed that we didn't specify which database table corresponds to our **User** Model. This is because the name of the Class will be used as the name of the table **unless** another name is explicitly specified. So in this case it will be assumed that the **User** model stores records in the User table
 
 If your model's corresponding database table does not fit this convention, you may manually specify the model's table name by defining a table property on the model:
 
 ```C#
-public class Actor : Model<Actor>
+public class User : Model<User>
 {
     [TableName]
-    public override string? Table { get; } = "Actors";
+    public override string? Table { get; } = "Users";
     ...
 }
 ```
@@ -60,10 +60,10 @@ public class Actor : Model<Actor>
 If the table is within a schema it must be specified by overriding the Schema property and using the Schema attribute.
 
 ```C#
-public class Actor : Model<Actor>
+public class User : Model<User>
 {
     [Schema]
-    public override string? Schema { get; } = "Hollywood";
+    public override string? Schema { get; } = "UserSchema";
     ...
 }
 ```
@@ -73,10 +73,10 @@ Unlike the table name, the primary key property must always be specified. The pr
 We need to use the **PrimaryKey** Attribute on the Property.
 
 ```C#
-public class Actor : Model<Actor>
+public class User : Model<User>
 {
     [PrimaryKey]
-    public int ActorId { get; set; }
+    public int UserId { get; set; }
     ...
 }
 ```
@@ -86,7 +86,7 @@ public class Actor : Model<Actor>
 Properties that are to be filled and are defined in the Model table must be specified with the **Fillable** attribute.
 
 ```C#
-public class Actor : Model<Actor>
+public class User : Model<User>
 {
     [Fillable]
     public string Name { get; set; }
@@ -102,18 +102,18 @@ Now insert records will be very simple.
 To insert a new record into the database, you should instantiate a new Model instance and set attributes on the Model. Then, call the **Insert** method on the Model instance:
 
 ```C#
-Actor ActorToSave = new();
+User UserToSave = new();
 
-ActorToSave.Name = "Keanu";
-ActorToSave.LastName = "Reeves";
+UserToSave.Name = "Keanu";
+UserToSave.LastName = "Reeves";
 
-ActorToSave.Insert();
+UserToSave.Insert();
 ```
 
 You can keep it simpler by using:
 
 ```C#
-Actor NewActor = Actor.Create(new()
+User NewUser = User.Create(new()
 {
     Name = "Keanu",
     LastName = "Reeves"
@@ -127,15 +127,14 @@ Following the example above:
 
 ```C#
 
-NewActor.Name = "Tom";
-NewActor.LastName = "Hanks";
-NewActor.Update(); 
+NewUser.Name = "Tom";
+NewUser.LastName = "Hanks";
+NewUser.Update(); 
 
 ```
 If you want to update only specific properties you can pass an anonymous object to the Update method
-
 ```C#
-NewActor.Update(new
+NewUser.Update(new
 {
     LastName = "Holland",
 });
@@ -143,13 +142,20 @@ NewActor.Update(new
 ```
 
 ### #Retrieving Models
+
+#### #Retrieving All Rows From A Table
 Of course you can get data from your database using very simple functions.  
 The model's **ToList** method will retrieve all of the records from the model's associated database table:
 
 ```C#
+List<User> Users = User.ToList();
+```
 
-List<Actor> Actors = Actor.ToList();
+#### #Retrieving A Single Row / Column From A Table
+If you just need to retrieve a single row from a database table, you may use first method:
 
+```C#
+User user = User.First();
 ```
 and like this, the Model has a list of functions that will allow you to retrieve data from the database quickly
 
@@ -168,7 +174,7 @@ and like this, the Model has a list of functions that will allow you to retrieve
 You can delete a record using the **Delete** function
 
 ```C#
-NewActor.Delete();
+NewUser.Delete();
 ```
 
 ## Query Builder
@@ -180,21 +186,21 @@ Query Builder provides a convenient fluent interface for creating and executing 
 You may use the query builder's where method to add "where" clauses to the query. The most basic call to the where method requires three arguments. The first argument is the name of the column. The second argument is an operator, which can be any of the database's supported operators. The third argument is the value to compare against the column's value.
 
 ```C#
-var actor = Actor.Where("Name", "=", "Tom").First();
+var user = User.Where("Name", "=", "Tom").First();
 ```
 If you want to verify that a column is `=` to a given value, you may pass the value as the second argument to the where method.  
 The Query Builder will assume you would like to use the `=` operator:
 
 ```C#
-var actor = Actor.Where("Name", "Tom").First();
+var user = User.Where("Name", "Tom").First();
 ```
 
 As previously mentioned, you may use any operator that is supported by your database system:
 
 ```C#
-var actor = Actor.Where("Name", "like", "%Tom%").First();
+var user = User.Where("Name", "like", "%Tom%").First();
 
-var actors = Actor.Where("Films", ">=", 10).ToList();
+var users = User.Where("Votes", ">=", 10).ToList();
 ```
 
 #### #Or Where Clauses
@@ -202,7 +208,7 @@ When chaining together calls to the query builder's where method, the "where" cl
 However, you may use the orWhere method to join a clause to the query using the or operator. The orWhere method accepts the same arguments as the where method:
 
 ```C#
-var actors = Actor.Where("Name","Tom").OrWhere("Name", "Keanu").ToList();
+var users = User.Where("Name","Tom").OrWhere("Name", "Keanu").ToList();
 ```
 
 #### #Additional Where Clauses
@@ -213,20 +219,20 @@ The **WhereBetween** method verifies that a column's value is between two values
 Receives two parameters, the first is the column's name and the second is an instance of the **DapperGlib.Util.Between** class which only has **From** and **To** properties
 
 ```C#
-List<Actor> Actors = Actor.WhereBetween("Films", new() { From = 5, To = 10 }).ToList();
+var users = User.WhereBetween("Votes", new() { From = 5, To = 10 }).ToList();
 ```
 
 The **WhereNotBetween** method verifies that a column's value lies outside of two values:
 
 ```C#
-List<Actor> Actors = Actor.WhereNotBetween("Films", new() { From = 5, To = 10 }).ToList();
+var users = User.WhereNotBetween("Votes", new() { From = 5, To = 10 }).ToList();
 ```
 
 The **WhereDateBetween** method verifies that a column's value is between two Dates.  
 Receives two parameters, the first is the column's name and the second is an instance of the **DapperGlib.Util.DateBetween** class which only has **From** and **To** properties
 
 ```C#
-List<Actor> Actors = Actor.WhereDateBetween("Birthday", new() { From = "1956-07-09", To = "1996-06-01" }).ToList();
+var users = User.WhereDateBetween("Birthday", new() { From = "1956-07-09", To = "1996-06-01" }).ToList();
 ```
 
 > WhereNot / OrWhereNot  
@@ -234,9 +240,9 @@ List<Actor> Actors = Actor.WhereDateBetween("Birthday", new() { From = "1956-07-
 The **WhereNot** and **OrWhereNot** methods may be used to negate a given group of query constraints
 
 ```C#
-List<Actor> Actors = Actor.WhereNot((Builder) =>
+var users = User.WhereNot((Builder) =>
 {
-    return Builder.Where("Films", ">", 10);
+    return Builder.Where("Votes", ">", 10);
 }).ToList();
 ```
 
@@ -245,50 +251,50 @@ List<Actor> Actors = Actor.WhereNot((Builder) =>
 The **WhereIn** method verifies that a given column's value is contained within the given array object
 
 ```C#
-List<Actor> Actors = Actor.WhereIn("ActorId", new object[] { 2, 3, 4 }).ToList();
+var users = User.WhereIn("UserId", new object[] { 2, 3, 4 }).ToList();
 ```
 
 The **WhereNotIn** method verifies that a given column's value is not contained within the given array object
 ```C#
-List<Actor> Actors = Actor.WhereNotIn("ActorId", new object[] { 2, 3, 4 }).ToList();
+var users = User.WhereNotIn("UserId", new object[] { 2, 3, 4 }).ToList();
 ```
 
 > WhereNull / WhereNotNull
 
 The **WhereNull** method verifies that the value of the given column is NULL:
 ```C#
-List<Actor> Actors = Actor.WhereNull("Films").ToList();
+var users = User.WhereNull("LastName").ToList();
 ```
 
 The **WhereNotNull** method verifies that the value of the given column is NOT NULL:
 
 ```C#
-List<Actor> Actors = Actor.WhereNotNull("Films").ToList();
+var users = User.WhereNotNull("LastName").ToList();
 ```
 > WhereDate / WhereYear / WhereMonth / WhereDay
 
 The **WhereDate** method may be used to compare a column's value against a date:
 
 ```C#
-List<Actor> Actors = Actor.WhereDate("LastFilmDate", "2022-07-01").ToList();
+var users = User.WhereDate("LastFilmDate", "2022-07-01").ToList();
 ```
 
 The **WhereYear** method may be used to compare a column's value against a specific year:
 
 ```C#
-List<Actor> Actors = Actor.WhereYear("LastFilmDate", "2022").ToList();
+var users = User.WhereYear("LastFilmDate", "2022").ToList();
 ```
 
 The **WhereMonth** method may be used to compare a column's value against a specific month:
 
 ```C#
-List<Actor> Actors = Actor.WhereMonth("LastFilmDate", "07").ToList();
+var users = User.WhereMonth("LastFilmDate", "07").ToList();
 ```
 
 The **WhereDay** method may be used to compare a column's value against a specific day of the month:
 
 ```C#
-List<Actor> Actors = Actor.WhereDay("LastFilmDate", "01").ToList();
+var users = User.WhereDay("LastFilmDate", "01").ToList();
 ```
 
 > WhereColumn
@@ -296,13 +302,13 @@ List<Actor> Actors = Actor.WhereDay("LastFilmDate", "01").ToList();
 The **WhereColumn** method may be used to verify that two columns are equal:
 
 ```C#
-List<Actor> Actors = Actor.WhereColumn("Name", "LastName").ToList();
+var users = User.WhereColumn("Name", "LastName").ToList();
 ```
 
 You may also pass a comparison operator to the whereColumn method:
 
 ```C#
-List<Actor> Actors = Actor.WhereColumn("Name", "!=", "LastName").ToList();
+var users = User.WhereColumn("Name", "!=", "LastName").ToList();
 ```
 
 > **Note: The columns must be of the same type**
@@ -312,31 +318,31 @@ List<Actor> Actors = Actor.WhereColumn("Name", "!=", "LastName").ToList();
 Sometimes you may need to group several "where" clauses within parentheses in order to achieve your query's desired logical grouping. In fact, you should generally always group calls to the orWhere method in parentheses in order to avoid unexpected query behavior. To accomplish this, you may pass a closure to the where method:
 
 ```C#
-List<Actor> Actors = Actor.Where("LastName", "Depp").Where((Builder) =>
+var users = User.Where("LastName", "Depp").Where((Builder) =>
 {
-    return Builder.Where("Films", ">", 10).OrWhere("Name", "Robert Downey Jr.");
+    return Builder.Where("Votes", ">", 10).OrWhere("Name", "Robert Downey Jr.");
 }).ToList();
 ```
-> output sql: select * from Actors where LastName = 'Depp' and (Films > 10 or Name = 'Robert Downey Jr.')
+> output sql: select * from Users where LastName = 'Depp' and (Votes > 10 or Name = 'Robert Downey Jr.')
 
 you can do the same with the OrWhere method
 
 ```C#
-List<Actor> Actors = Actor.Where("LastName", "Depp").OrWhere((Builder) =>
+var users = User.Where("LastName", "Depp").OrWhere((Builder) =>
 {
-    return Builder.Where("Films", ">", 10).OrWhere("Name", "Robert Downey Jr.");
+    return Builder.Where("Votes", ">", 10).OrWhere("Name", "Robert Downey Jr.");
 }).ToList();
 ```
 
-> output sql: select * from Actors where LastName = 'Depp' or (Films > 10 or Name = 'Robert Downey Jr.')
+> output sql: select * from Users where LastName = 'Depp' or (Votes > 10 or Name = 'Robert Downey Jr.')
 
 ### #Mass Updates
 Updates can also be performed against models that match a given query using the update method with passing an anonymous object.  
-In this example, all actors that have a destination of San Diego will be updated:
+In this example, all users that have a destination of San Diego will be updated:
 
 ```C#
-Actor.Where("Destination", "San Diego").Update(new {
-    ToTheBeach = true
+User.Where("Destination", "San Diego").Update(new {
+    delayed = 1
 });
 ```
 
@@ -344,7 +350,7 @@ Actor.Where("Destination", "San Diego").Update(new {
 The query builder's delete method may be used to delete records from the table. You may constrain delete statements by adding "where" clauses before calling the delete method:
 
 ```C#
-Actor.Where("Name", "Tom").Delete();
+User.Where("Name", "Tom").Delete();
 ```
 
 ### #Ordering, Limit & Offset
@@ -354,29 +360,29 @@ Actor.Where("Name", "Tom").Delete();
 The **OrderBy** method allows you to sort the results of the query by a given column. The first argument accepted by the orderBy method should be the column you wish to sort by, while the second argument determines the direction of the sort and may be either asc or desc:
 
 ```C#
-List<Actor> Actors = Actor.OrderBy("Name").ToList();
+var users = User.OrderBy("Name").ToList();
 
-List<Actor> Actors = Actor.OrderBy("Name", "DESC").ToList();
+var users = User.OrderBy("Name", "DESC").ToList();
 ```
 
 To sort by multiple columns, you may simply invoke orderBy as many times as necessary:
 
 ```C#
-List<Actor> Actors = Actor.OrderBy("Name").OrderBy("LastName").ToList();
+var users = User.OrderBy("Name").OrderBy("LastName").ToList();
 ```
 
 you can also randomize them using method **InRandomOrder**
 
 ```C#
-List<Actor> Actors = Actor.InRandomOrder().ToList();
+var users = User.InRandomOrder().ToList();
 ```
 
 #### #Limit & Offset
 You may use the **Take** methods to limit the number of results returned from the query and to skip a given number of results in the query:
 
 ```C#
-List<Actor> Actors = Actor.Take(10).ToList(); // returns the top 10 actors
-List<Actor> Actors = Actor.Take(10,10).ToList(); // returns the next 10 actors skipping the previous 10
+var users = User.Take(10).ToList(); // returns the top 10 users
+var users = User.Take(10,10).ToList(); // returns the next 10 users skipping the previous 10
 ```
 > #### The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
 
@@ -386,7 +392,7 @@ Sometimes you may want certain query clauses to apply to a query based on anothe
 For instance, you may accomplish this using the **When** method:
 
 ```C#
-List<Actor> Actors = Actor.When(4 == 4, (Builder) =>
+var users = User.When(4 == 4, (Builder) =>
 {
     return Builder.WhereNotNull("LastName");
 }).ToList();
@@ -477,24 +483,24 @@ When retrieving model records, you may wish to limit your results based on the e
 
 ```C#
 //Retrieve all users that have at least one comment...
-List<User> Users = User.WhereHas(new Relationship<Comment>("UserId")).ToList();
+var users = User.WhereHas(new Relationship<Comment>("UserId")).ToList();
 ```
 You may also specify an operator and count value to further customize the query:
 
 ```C#
 // Retrieve all users that have three or more comments...
-List<User> Users = User.WhereHas(new Relationship<Comment>("UserId"), ">=", 3).ToList();
+var users = User.WhereHas(new Relationship<Comment>("UserId"), ">=", 3).ToList();
 ```
 If you need even more power, you may pass a `closure` to define additional query constraints on your queries, such as validate the Likes of a comment:
 
 ```C#
 // Retrieve all users that have one or more comments with Likes over 100...
-List<User> Users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
 
 // Retrieve users with at least ten comments with Likes over 100...
-List<User> Users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereHas(new Relationship<Comment>("UserId"), (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }, ">=", 10).ToList();
 ```
@@ -503,13 +509,13 @@ When retrieving model records, you may wish to limit your results based on the a
 
 ```C#
 //Retrieve all users that not have comments...
-List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId")).ToList();
+var users = User.WhereDoesntHave(new Relationship<Comment>("UserId")).ToList();
 ```
 you can also pass a `closure` to add an additional constraint
 
 ```C#
 // Retrieve all users that not have comments with Likes over 100...
-List<User> Users = User.WhereDoesntHave(new Relationship<Comment>("UserId"), (Builder)=>{
+var users = User.WhereDoesntHave(new Relationship<Comment>("UserId"), (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
 ```
