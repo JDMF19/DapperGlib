@@ -412,6 +412,20 @@ int TotalProductsWithDiscount  = Product.Where("Discount", ">", 0).Count();
 double MaxPriceDiscount = Product.Where("Discount", ">", 0).Max("Price");
 double TotalPriceDiscount = Product.Where("Discount", ">", 0).Sum("Price");
 ```
+### #Distinct
+The **Distinct** method allows you to force the query to return distinct results:
+
+```C#
+var products = Product.Distinct().ToList();
+```
+> output sql: select DISTINCT * from Product
+
+You can specify the fields by passing a string separated by commas
+
+```C#
+var products = Product.Distinct("Name, Price").ToList();
+```
+> output sql: select DISTINCT Name, Price from Product
 
 ## Relationships
 
