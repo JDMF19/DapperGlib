@@ -399,6 +399,20 @@ var users = User.When(4 == 4, (Builder) =>
 }).ToList();
 ```
 
+### #Aggregates
+The query builder also provides a variety of methods for retrieving aggregate values like **Count**, **Max**, **Min**, **Avg** and **Sum**. You may call any of these methods after constructing your query:
+
+```C#
+double price  = Product.Max("Price");
+```
+Of course, you may combine these methods with other clauses to fine-tune how your aggregate value is calculated:
+
+```C#
+int TotalProductsWithDiscount  = Product.Where("Discount", ">", 0).Count();
+double MaxPriceDiscount = Product.Where("Discount", ">", 0).Max("Price");
+double TotalPriceDiscount = Product.Where("Discount", ">", 0).Sum("Price");
+```
+
 ## Relationships
 
 ### #Introduction
