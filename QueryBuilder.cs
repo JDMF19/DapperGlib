@@ -316,24 +316,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            var regex = new Regex(Regex.Escape("_selector_all"));
-            var newQuery = regex.Replace(Query.ToString(), "_selector_count", 1);
-
-            Query = new(newQuery);
-
             using var conection = _context.CreateConnection();
 
-            var result = conection.Query<int>(ToSql());
+            var result = conection.Query<int>(SqlAggregate("_selector_count"));
 
             return result.FirstOrDefault();
         }
@@ -345,21 +330,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            Query.Replace("_selector_all", Column);
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<string>(ToSql());
+            var item = conection.QueryFirst<string>(SqlAggregate(Column));
 
             return item;
 
@@ -384,21 +357,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            Query.Replace("_selector_all", $"max({Column})");
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"max({Column})"));
 
             return item;
         }
@@ -410,21 +371,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            Query.Replace("_selector_all", $"min({Column})");
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"min({Column})"));
 
             return item;
         }
@@ -436,21 +385,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            Query.Replace("_selector_all", $"avg({Column})");
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"avg({Column})"));
 
             return item;
         }
@@ -462,21 +399,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (HasOrderClause())
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with Order Clause");
-            }
-
-            if (CountsRelationship.Count > 0)
-            {
-                throw new ApplicationException("Aggregate methods are incompatible with the WithCount method");
-            }
-
-            Query.Replace("_selector_all", $"sum({Column})");
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"sum({Column})"));
 
             return item;
         }
@@ -801,23 +726,29 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
+            var order = new StringBuilder("");
+
             string ClauseName = string.Join(" ", Clauses.ORDER_BY.ToString().Split("_"));
 
-            if (Query.ToString().Contains(ClauseName))
+            if (OrderList.Count == 0)
             {
-                Query.Append($", ");
+                order.Append($" {ClauseName} ");
             }
             else
             {
-                Query.Append($" {ClauseName} ");
+                order.Append(", ");
             }
 
-            Query.Append($" {Column} ");
+            order.Append($" {Column} ");
 
             if (Direction != null)
             {
-                Query.Append($" {Direction} ");
+                order.Append($" {Direction} ");
             }
+
+            OrderList.Add(order.ToString());
+
+            Query.Append($" order_clause_{OrderList.Count} ");
         }
 
         internal static string GetPrimaryKey()

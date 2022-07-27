@@ -14,6 +14,7 @@ namespace DapperGlib
         internal StringBuilder Query { get; set; } = new StringBuilder();
         internal List<object> SubQueries { get; set; } = new();
         internal List<string> CountsRelationship { get; set; } = new();
+        internal List<string> OrderList { get; set; } = new();
         internal string? SkipString { get; set; }
         internal string? TakeString { get; set; }
 
@@ -34,8 +35,20 @@ namespace DapperGlib
             return BuildQuery();
         }
 
-        internal string BuildQuery()
+        internal string SqlAggregate(string ReplaceSelector)
         {
+            return BuildQuery(ReplaceSelector);
+        }
+
+        internal string BuildQuery(string? ReplaceSelectorAggregate = null)
+        {
+            var QueryCopy = Query.ToString();
+
+            if (ReplaceSelectorAggregate != null)
+            {
+                var regex = new Regex(Regex.Escape("_selector_all"));
+                QueryCopy = regex.Replace(QueryCopy, ReplaceSelectorAggregate, 1);
+            }
 
             int i = 1;
             foreach (dynamic genericBuilder in SubQueries)
@@ -56,7 +69,7 @@ namespace DapperGlib
                     squery = $" {clause} ( {genericBuilder.ToSql()} ) ";
                 }
 
-                Query.Replace(index, squery);
+                QueryCopy = QueryCopy.Replace(index, squery);
                 i++;
             }
 
@@ -64,24 +77,50 @@ namespace DapperGlib
             foreach (string countQuery in CountsRelationship)
             {
                 string index = $"count_relationship_{j}";
-                Query.Replace(index, countQuery);
+                if (ReplaceSelectorAggregate == null)
+                {
+                    QueryCopy = QueryCopy.Replace(index, countQuery);
+                }
+                else
+                {
+                    QueryCopy = QueryCopy.Replace(index, "");
+                }
+                
                 j++;
             }
 
             if (SkipString != null)
             {
-                Query.Replace("skip_string", SkipString);
+                QueryCopy = QueryCopy.Replace("skip_string", SkipString);
             }
 
             if (TakeString != null)
             {
-                Query.Replace("take_string", TakeString);
+                QueryCopy = QueryCopy.Replace("take_string", TakeString);
             }
 
-            Query.Replace("_selector_all", "*");
-            Query.Replace("_selector_count", "count(*)");
+            QueryCopy = QueryCopy.Replace("_selector_all", "*");
+            QueryCopy = QueryCopy.Replace("_selector_count", "count(*)");
 
-            return Regex.Replace(Query.ToString(),@"\s+"," ").Trim();
+            int x = 1;
+            foreach (var order in OrderList)
+            {
+                string index = $"order_clause_{x}";
+
+                if (ReplaceSelectorAggregate == null)
+                {
+                    QueryCopy = QueryCopy.Replace(index, order);
+                }
+                else
+                {
+                    QueryCopy = QueryCopy.Replace(index, "");
+                }
+
+                x++;
+            }
+
+
+            return Regex.Replace(QueryCopy, @"\s+"," ").Trim();
         }
 
         internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator, bool Reverse = false)
@@ -469,9 +508,7 @@ namespace DapperGlib
 
         internal bool HasOrderClause()
         {
-            string ClauseName = string.Join(" ", Clauses.ORDER_BY.ToString().Split("_"));
-
-            if (Query != null && Query.ToString().Contains(ClauseName))
+            if (OrderList.Count > 0)
             {
                 return true;
             }

@@ -217,7 +217,6 @@ namespace DapperGlib
         {
             var Builder = new QueryBuilder<T>().SimpleQuery();
             return Builder.Count();
-
         }
 
         public static string Value(string Column)
