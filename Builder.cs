@@ -141,7 +141,6 @@ namespace DapperGlib
                 reverse = LogicalOperators.NOT.ToString();
             }
 
-
             string ExtraCondition = $" {reverse} ( {SBuilder.GetQuery().Split("WHERE")[1]} ) ";
 
             foreach (var item in SBuilder.SubQueries)
@@ -150,6 +149,8 @@ namespace DapperGlib
             }
 
             Query.Append($" {ExtraCondition} ");
+
+            ConditionsAdded++;
         }
 
         internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null)
