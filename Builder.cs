@@ -125,32 +125,38 @@ namespace DapperGlib
 
         internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator, bool Reverse = false)
         {
-            AddWhereClause();
-
-            if (ConditionsAdded != 0)
-            {
-                Query.Append($" {logicalOperator} ");
-            }
 
             var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
+            var parts = SBuilder.GetQuery().Split("WHERE");
 
-            string reverse = "";
-
-            if (Reverse)
+            if (parts.Length == 2)
             {
-                reverse = LogicalOperators.NOT.ToString();
+                AddWhereClause();
+
+                string reverse = "";
+
+                if (Reverse)
+                {
+                    reverse = LogicalOperators.NOT.ToString();
+                }
+
+                if (ConditionsAdded != 0)
+                {
+                    Query.Append($" {logicalOperator} ");
+                }
+
+                string ExtraCondition = $" {reverse} ( {parts[1]} ) ";
+
+                foreach (var item in SBuilder.SubQueries)
+                {
+                    SubQueries.Add(item);
+                }
+
+                Query.Append($" {ExtraCondition} ");
+
+                ConditionsAdded++;
             }
-
-            string ExtraCondition = $" {reverse} ( {SBuilder.GetQuery().Split("WHERE")[1]} ) ";
-
-            foreach (var item in SBuilder.SubQueries)
-            {
-                SubQueries.Add(item);
-            }
-
-            Query.Append($" {ExtraCondition} ");
-
-            ConditionsAdded++;
+          
         }
 
         internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null)
@@ -243,14 +249,19 @@ namespace DapperGlib
 
                     var SBuilder = Builder.Invoke(new("", Clause));
 
-                    string ExtraCondition = $"{LogicalOperators.AND} {SBuilder.GetQuery().Split("WHERE")[1]}";
+                    var parts = SBuilder.GetQuery().Split("WHERE");
 
-                    foreach (var item in SBuilder.SubQueries)
+                    if (parts.Length == 2)
                     {
-                        SubQueryRelationship.SubQueries.Add(item);
-                    }
+                        string ExtraCondition = $"{LogicalOperators.AND} {parts[1]}";
 
-                    SubQueryRelationship.Query.Append($" {ExtraCondition} ");
+                        foreach (var item in SBuilder.SubQueries)
+                        {
+                            SubQueryRelationship.SubQueries.Add(item);
+                        }
+
+                        SubQueryRelationship.Query.Append($" {ExtraCondition} ");
+                    }
 
                 }
 
@@ -316,24 +327,31 @@ namespace DapperGlib
             if (Condition && !HasOrderClause() && Builder != null)
             {
                 var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
+                var parts = SBuilder.GetQuery().Split("WHERE");
 
-                AddWhereClause();
-
-                if (ConditionsAdded != 0)
+                if (parts.Length == 2)
                 {
-                    Query.Append($" {LogicalOperators.AND} ");
+
+                    AddWhereClause();
+
+                    if (ConditionsAdded != 0)
+                    {
+                        Query.Append($" {LogicalOperators.AND} ");
+                    }
+
+                    string ExtraCondition = $"{LogicalOperators.AND} {parts[1]}";
+
+                    foreach (var item in SBuilder.SubQueries)
+                    {
+                        SubQueries.Add(item);
+                    }
+
+                    Query.Append($" {ExtraCondition} ");
+
+                    ConditionsAdded += 1;
                 }
 
-                var ExtraCondition = $" {SBuilder.GetQuery().Split("WHERE")[1]} ";
-
-                foreach (var item in SBuilder.SubQueries)
-                {
-                    SubQueries.Add(item);
-                }
-
-                Query.Append($" {ExtraCondition} ");
-
-                ConditionsAdded += 1;
+              
             }
 
         }
