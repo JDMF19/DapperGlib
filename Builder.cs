@@ -339,7 +339,7 @@ namespace DapperGlib
                         Query.Append($" {LogicalOperators.AND} ");
                     }
 
-                    string ExtraCondition = $"{LogicalOperators.AND} {parts[1]}";
+                    string ExtraCondition = $"{parts[1]}";
 
                     foreach (var item in SBuilder.SubQueries)
                     {

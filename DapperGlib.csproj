@@ -9,7 +9,7 @@
     <RepositoryUrl>https://github.com/JDMF19/DapperGlib.git</RepositoryUrl>
     <PackageTags>Dapper;Database;Laravel;Eloquent;</PackageTags>
     <Authors>JDMF19</Authors>
-    <Version>1.2.3</Version>
+    <Version>1.2.4</Version>
     <Description>An easy way to interact with the database using Dapper inspired by Laravel</Description>
   </PropertyGroup>
 
