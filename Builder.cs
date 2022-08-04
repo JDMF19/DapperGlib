@@ -17,7 +17,6 @@ namespace DapperGlib
         internal List<string> OrderList { get; set; } = new();
         internal string? SkipString { get; set; }
         internal string? TakeString { get; set; }
-
         internal int ConditionsAdded = 0;
 
         public Builder()
@@ -269,58 +268,6 @@ namespace DapperGlib
             }
 
         }
-
-        //internal void WhereHasBuilder<TRelationship>(Clauses Clause, Relationship<TRelationship> Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
-        //{
-        //    if (!HasOrderClause())
-        //    {
-        //        var ReturnInstance = Activator.CreateInstance(typeof(TRelationship))!;
-
-        //        AddWhereClause();
-
-        //        if (ConditionsAdded != 0)
-        //        {
-        //            Query.Append($" {LogicalOperators.AND} ");
-        //        }
-
-        //        string Table = GetTableName(ReturnInstance);
-        //        string OwnTable = GetTableName();
-
-        //        SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{Relationship.ForeignKey} = {OwnTable}.{Relationship.LocalKey} ", Clause);
-
-        //        if (ComparisonOperator != null && Value != null)
-        //        {
-        //            SubQueryRelationship.Query = new(SubQueryRelationship.Query.ToString().Replace("_selector_all", "_selector_count"));
-
-        //            SubQueryRelationship.AsCondition = true;
-        //            SubQueryRelationship.ConditionOperator = ComparisonOperator;
-        //            SubQueryRelationship.ConditionValue = Value;
-        //        }
-
-
-        //        SubQueries.Add(SubQueryRelationship);
-
-        //        Query.Append($" SubQuery_{SubQueries.Count} ");
-
-        //        if (Builder != null)
-        //        {
-        //            var SBuilder = Builder.Invoke(new SubQuery<TRelationship>("",Clause));
-
-        //            string ExtraCondition = $"{LogicalOperators.AND} {SBuilder.GetQuery().Split("WHERE")[1]}";
-
-        //            foreach (var item in SBuilder.SubQueries)
-        //            {
-        //                SubQueryRelationship.SubQueries.Add(item);
-        //            }
-
-        //            SubQueryRelationship.Query.Append($" {ExtraCondition} ");
-
-        //        }
-
-        //        ConditionsAdded += 1;
-        //    }
-
-        //}
 
         internal void InitWhen(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {

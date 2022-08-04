@@ -14,6 +14,17 @@ namespace DapperGlib
 
         }
 
+        public QueryBuilder(QueryBuilder<TModel> Clone)
+        {
+            Query = Clone.Query;
+            SubQueries = Clone.SubQueries;
+            CountsRelationship = Clone.CountsRelationship;
+            OrderList = Clone.OrderList;
+            SkipString = Clone.SkipString;
+            TakeString = Clone.TakeString;
+            ConditionsAdded = Clone.ConditionsAdded;
+        }
+
         public QueryBuilder(string query)
         {
             Query = new StringBuilder(query);
@@ -131,7 +142,12 @@ namespace DapperGlib
             }
 
             string table = GetTableName();
-            string primaryKey = GetPrimaryKey();
+            string? primaryKey = GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defind");
+            }
 
             Query = new StringBuilder($"UPDATE {table} SET {String.Join(",", Values)} WHERE {primaryKey} = @{primaryKey}");
 
@@ -154,7 +170,12 @@ namespace DapperGlib
             }
 
             string table = GetTableName();
-            string primaryKey = GetPrimaryKey();
+            string? primaryKey = GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             Query = new StringBuilder($"UPDATE {table} SET {String.Join(",", Values)} WHERE {primaryKey} = @{primaryKey}");
 
@@ -164,7 +185,12 @@ namespace DapperGlib
         internal void SimpleDelete<T>(T Item)
         {
             string table = GetTableName();
-            string primaryKey = GetPrimaryKey();
+            string? primaryKey = GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             Query = new StringBuilder($"{Clauses.DELETE} FROM {table} WHERE {primaryKey} = @{primaryKey}");
 
@@ -176,7 +202,12 @@ namespace DapperGlib
         internal Task<int> SimpleDeleteAsync<T>(T Item)
         {
             string table = GetTableName();
-            string primaryKey = GetPrimaryKey();
+            string? primaryKey = GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             Query = new StringBuilder($"{Clauses.DELETE} FROM {table} WHERE {primaryKey} = @{primaryKey}");
 
@@ -751,24 +782,29 @@ namespace DapperGlib
             Query.Append($" order_clause_{OrderList.Count} ");
         }
 
-        internal static string GetPrimaryKey()
+        internal static string? GetPrimaryKey()
         {
             PropertyInfo? primaryAttribute = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(PrimaryKey))).FirstOrDefault();
-            return (primaryAttribute != null) ? primaryAttribute.Name : "Id";
+            return primaryAttribute?.Name;
         }
 
-        internal static string GetPrimaryKey(object Instance)
+        internal static string? GetPrimaryKey(object Instance)
         {
             PropertyInfo? primaryAttribute = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(PrimaryKey))).FirstOrDefault();
-            return (primaryAttribute != null) ? primaryAttribute.Name : "Id";
+            return primaryAttribute?.Name;
         }
 
-        internal static string LastIdQuery()
+        internal static string? LastIdQuery()
         {
             string table = GetTableName();
-            string PrimaryKey = GetPrimaryKey();
+            string? PrimaryKey = GetPrimaryKey();
 
-            return $"SELECT TOP 1 {PrimaryKey} FROM {table} ORDER BY {PrimaryKey} DESC";
+            if (PrimaryKey != null)
+            {
+                return $"SELECT TOP 1 {PrimaryKey} FROM {table} ORDER BY {PrimaryKey} DESC";
+            }
+
+            return null;
         }
 
         protected static List<PropertyInfo> GetFillableProperties()
@@ -778,5 +814,9 @@ namespace DapperGlib
             return Properties;
         }
 
+        internal QueryBuilder<TModel> Clone()
+        {
+            return new QueryBuilder<TModel>(this);
+        }
     }
 }

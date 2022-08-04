@@ -30,14 +30,20 @@ namespace DapperGlib
             using var conection = _context.CreateConnection();
             conection.Execute(Builder.ToSql(), this);
 
-            int LastId = conection.Query<int>(QueryBuilder<T>.LastIdQuery()).First();
+            string? query = QueryBuilder<T>.LastIdQuery();
 
-            PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
-
-            if (primaryAttribute != null)
+            if (query != null)
             {
-                primaryAttribute.SetValue(this, LastId);
+                int LastId = conection.Query<int>(query).First();
+
+                PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+                if (primaryAttribute != null)
+                {
+                    primaryAttribute.SetValue(this, LastId);
+                }
             }
+          
         }
 
         public static T Create(T Item)
@@ -48,9 +54,21 @@ namespace DapperGlib
             using var conection = _context.CreateConnection();
             conection.Execute(Builder.ToSql(), Item);
 
-            int LastId = conection.Query<int>(QueryBuilder<T>.LastIdQuery()).First();
+            string? query = QueryBuilder<T>.LastIdQuery();
 
-            return Model<T>.Find(LastId) ?? (new());
+            if (query != null)
+            {
+                int LastId = conection.Query<int>(query).First();
+
+                PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+                if (primaryAttribute != null)
+                {
+                    primaryAttribute.SetValue(Item, LastId);
+                }
+            }
+
+            return Item;
         }
 
         public static void UpdateAll(dynamic args)
@@ -153,7 +171,12 @@ namespace DapperGlib
 
         public static T Find(int Id)
         {
-            string primaryKey = QueryBuilder<T>.GetPrimaryKey();
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
@@ -165,7 +188,12 @@ namespace DapperGlib
 
         public static Task<T> FindAsync(int Id)
         {
-            string primaryKey = QueryBuilder<T>.GetPrimaryKey();
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
@@ -177,7 +205,12 @@ namespace DapperGlib
 
         public static T? FindOrDefault(int Id)
         {
-            string primaryKey = QueryBuilder<T>.GetPrimaryKey();
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
@@ -189,7 +222,12 @@ namespace DapperGlib
 
         public static Task<T?> FindOrDefaultAsync(int Id)
         {
-            string primaryKey = QueryBuilder<T>.GetPrimaryKey();
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
@@ -249,6 +287,13 @@ namespace DapperGlib
             return Builder.Sum(Column);
         }
         #endregion
+
+        public static QueryBuilder<T> Query()
+        {
+            var Builder = new QueryBuilder<T>().SimpleQuery();
+
+            return Builder;
+        }
 
         public static QueryBuilder<T> Skip(int Rows)
         {
