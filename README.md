@@ -577,7 +577,7 @@ using (var transactionScope = new TransactionScope())
     User.Create(new()
     {
         Name = "Patric",
-        LastName = "Jonh"
+        LastName = "Jane"
     });
 
     transactionScope.Complete();
