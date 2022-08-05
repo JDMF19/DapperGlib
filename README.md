@@ -69,7 +69,7 @@ public class User : Model<User>
 ```
 
 #### #Primary Keys
-Unlike the table name, the primary key property must always be specified. The primary key will be used for action queries like Update, Delete, Etc.
+Unlike the table name, the primary key property must always be specified. The primary key will be used for action queries like Update, Find, Delete, Etc.
 We need to use the **PrimaryKey** Attribute on the Property.
 
 ```C#
@@ -323,7 +323,7 @@ var users = User.Where("Votes", ">", 100).Where((Builder) =>
     return Builder.Where("Votes", ">", 10).OrWhere("Name", "Robert Downey Jr.");
 }).ToList();
 ```
-> output sql: select * from Users where Votes > 100 and (Votes > 10 or Name = 'Robert Downey Jr.') 
+> SQL Output: **select * from Users where Votes > 100 and (Votes > 10 or Name = 'Robert Downey Jr.')**
 
 you can do the same with the OrWhere method
 
@@ -334,7 +334,7 @@ var users = User.Where("Votes", ">", 100).OrWhere((Builder) =>
 }).ToList();
 ```
 
-> output sql: select * from Users where Votes > 100 or (Votes > 10 and Name = 'Abigail')
+> SQL Output: **select * from Users where Votes > 100 or (Votes > 10 and Name = 'Abigail')**
 
 ### #Mass Updates
 Updates can also be performed against models that match a given query using the update method with passing an anonymous object.  
@@ -418,14 +418,14 @@ The **Distinct** method allows you to force the query to return distinct results
 ```C#
 var products = Product.Distinct().ToList();
 ```
-> output sql: select DISTINCT * from Product
+> SQL Output: **select DISTINCT * from Product**
 
 You can specify the fields by passing a string separated by commas
 
 ```C#
 var products = Product.Distinct("Name, Price").ToList();
 ```
-> output sql: select DISTINCT Name, Price from Product
+> SQL Output: **select DISTINCT Name, Price from Product**
 
 ## Relationships
 
