@@ -35,20 +35,20 @@ namespace DapperGlib
             return BuildQuery();
         }
 
-        //internal string SqlAggregate(string ReplaceSelector)
-        //{
-        //    return BuildQuery(ReplaceSelector);
-        //}
+        internal string SqlAggregate(string ReplaceSelector)
+        {
+            return BuildQuery(ReplaceSelector);
+        }
 
-        internal string BuildQuery()
+        internal string BuildQuery(string? ReplaceSelectorAggregate = null)
         {
             var QueryCopy = Query.ToString();
 
-            //if (ReplaceSelectorAggregate != null)
-            //{
-            //    var regex = new Regex(Regex.Escape("_selector_all"));
-            //    QueryCopy = regex.Replace(QueryCopy, ReplaceSelectorAggregate, 1);
-            //}
+            if (ReplaceSelectorAggregate != null)
+            {
+                var regex = new Regex(Regex.Escape("_selector_all"));
+                QueryCopy = regex.Replace(QueryCopy, ReplaceSelectorAggregate, 1);
+            }
 
             int i = 1;
             foreach (dynamic genericBuilder in SubQueries)
@@ -77,18 +77,21 @@ namespace DapperGlib
             foreach (string countQuery in CountsRelationship)
             {
                 string index = $"count_relationship_{j}";
-                QueryCopy = QueryCopy.Replace(index, countQuery);
+                string replace = ReplaceSelectorAggregate == null ? countQuery : "";
+                QueryCopy = QueryCopy.Replace(index, replace);
                 j++;
             }
 
             if (SkipString != null)
             {
-                QueryCopy = QueryCopy.Replace("skip_string", SkipString);
+                string replace = ReplaceSelectorAggregate == null ? SkipString : "";
+                QueryCopy = QueryCopy.Replace("skip_string", replace);
             }
 
             if (TakeString != null)
             {
-                QueryCopy = QueryCopy.Replace("take_string", TakeString);
+                string replace = ReplaceSelectorAggregate == null ? TakeString : "";
+                QueryCopy = QueryCopy.Replace("take_string", replace);
             }
 
             if (SelectList.Length > 0)
@@ -104,10 +107,11 @@ namespace DapperGlib
             foreach (var order in OrderList)
             {
                 string index = $"order_clause_{x}";
-                QueryCopy = QueryCopy.Replace(index, order);
+                string replace = ReplaceSelectorAggregate == null ? order : "";
+                QueryCopy = QueryCopy.Replace(index, replace);
                 x++;
             }
-
+           
 
             return Regex.Replace(QueryCopy, @"\s+"," ").Trim();
         }

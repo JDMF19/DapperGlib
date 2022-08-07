@@ -435,11 +435,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            SelectList = new string[] { $"count(*) as CountColumn" };
-
             using var conection = _context.CreateConnection();
 
-            var result = conection.Query<int>(ToSql());
+            var result = conection.Query<int>(SqlAggregate($"count(*) as CountColumn"));
 
             return result.FirstOrDefault();
         }
@@ -451,11 +449,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            SelectList = new string[] { $"{Column} as ValueColumn" };
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<string>(ToSql());
+            var item = conection.QueryFirst<string>(SqlAggregate($"{Column} as ValueColumn"));
 
             return item;
 
@@ -480,11 +476,10 @@ namespace DapperGlib
                 SimpleQuery();
             }
             //SelectList.Concat(new string[] { $"max({Column})" }).ToArray();
-            SelectList = new string[] { $"max({Column})" };
 
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"max({Column})"));
 
             return item;
         }
@@ -495,11 +490,10 @@ namespace DapperGlib
             {
                 SimpleQuery();
             }
-            SelectList = new string[] { $"min({Column})" };
 
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"min({Column})"));
 
             return item;
         }
@@ -511,11 +505,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            SelectList = new string[] { $"avg({Column})" };
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"avg({Column})"));
 
             return item;
         }
@@ -527,11 +519,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            SelectList = new string[] { $"sum({Column})" };
-
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(ToSql());
+            var item = conection.QueryFirst<double>(SqlAggregate($"sum({Column})"));
 
             return item;
         }
