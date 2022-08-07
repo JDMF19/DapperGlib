@@ -15,6 +15,7 @@ namespace DapperGlib
         internal List<object> SubQueries { get; set; } = new();
         internal List<string> CountsRelationship { get; set; } = new();
         internal List<string> OrderList { get; set; } = new();
+        internal string[] SelectList { get; set; } = Array.Empty<string>();
         internal string? SkipString { get; set; }
         internal string? TakeString { get; set; }
         internal int ConditionsAdded = 0;
@@ -34,20 +35,20 @@ namespace DapperGlib
             return BuildQuery();
         }
 
-        internal string SqlAggregate(string ReplaceSelector)
-        {
-            return BuildQuery(ReplaceSelector);
-        }
+        //internal string SqlAggregate(string ReplaceSelector)
+        //{
+        //    return BuildQuery(ReplaceSelector);
+        //}
 
-        internal string BuildQuery(string? ReplaceSelectorAggregate = null)
+        internal string BuildQuery()
         {
             var QueryCopy = Query.ToString();
 
-            if (ReplaceSelectorAggregate != null)
-            {
-                var regex = new Regex(Regex.Escape("_selector_all"));
-                QueryCopy = regex.Replace(QueryCopy, ReplaceSelectorAggregate, 1);
-            }
+            //if (ReplaceSelectorAggregate != null)
+            //{
+            //    var regex = new Regex(Regex.Escape("_selector_all"));
+            //    QueryCopy = regex.Replace(QueryCopy, ReplaceSelectorAggregate, 1);
+            //}
 
             int i = 1;
             foreach (dynamic genericBuilder in SubQueries)
@@ -76,15 +77,7 @@ namespace DapperGlib
             foreach (string countQuery in CountsRelationship)
             {
                 string index = $"count_relationship_{j}";
-                if (ReplaceSelectorAggregate == null)
-                {
-                    QueryCopy = QueryCopy.Replace(index, countQuery);
-                }
-                else
-                {
-                    QueryCopy = QueryCopy.Replace(index, "");
-                }
-                
+                QueryCopy = QueryCopy.Replace(index, countQuery);
                 j++;
             }
 
@@ -98,6 +91,12 @@ namespace DapperGlib
                 QueryCopy = QueryCopy.Replace("take_string", TakeString);
             }
 
+            if (SelectList.Length > 0)
+            {
+                string selectString = string.Join(",", SelectList);
+                QueryCopy = QueryCopy.Replace("_selector_all", selectString);
+            }
+
             QueryCopy = QueryCopy.Replace("_selector_all", "*");
             QueryCopy = QueryCopy.Replace("_selector_count", "count(*)");
 
@@ -105,16 +104,7 @@ namespace DapperGlib
             foreach (var order in OrderList)
             {
                 string index = $"order_clause_{x}";
-
-                if (ReplaceSelectorAggregate == null)
-                {
-                    QueryCopy = QueryCopy.Replace(index, order);
-                }
-                else
-                {
-                    QueryCopy = QueryCopy.Replace(index, "");
-                }
-
+                QueryCopy = QueryCopy.Replace(index, order);
                 x++;
             }
 
@@ -128,7 +118,7 @@ namespace DapperGlib
             var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
             var parts = SBuilder.GetQuery().Split("WHERE");
 
-            if (parts.Length == 2)
+            if (parts.Length == 2 && CanAddCondition())
             {
                 AddWhereClause();
 
@@ -197,7 +187,7 @@ namespace DapperGlib
 
         internal void WhereHasBuilder<TRelationship>(Clauses Clause, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
         {
-            if (!HasOrderClause())
+            if (CanAddCondition())
             {
 
                 var ReturnInstance = Activator.CreateInstance(typeof(TRelationship))!;
@@ -271,7 +261,7 @@ namespace DapperGlib
 
         internal void InitWhen(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {
-            if (Condition && !HasOrderClause() && Builder != null)
+            if (Condition && CanAddCondition() && Builder != null)
             {
                 var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
                 var parts = SBuilder.GetQuery().Split("WHERE");
@@ -305,7 +295,7 @@ namespace DapperGlib
 
         internal void AddCondition(string Column, string ComparisonOperator, object? Value, LogicalOperators logicalOperators)
         {
-            if (!HasOrderClause())
+            if (CanAddCondition())
             {
                 AddWhereClause();
 
@@ -457,6 +447,26 @@ namespace DapperGlib
 
         }
 
+        internal bool CanAddCondition()
+        {
+            if (OrderList.Count > 0)
+            {
+                return false;
+            }
+
+            if (HasGroupByClause())
+            {
+                return false;
+            }
+
+            if (Query.ToString().Contains(Clauses.HAVING.ToString()))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         internal void AddWhereClause()
         {
             if (!CheckQueryInit())
@@ -470,6 +480,11 @@ namespace DapperGlib
             {
                 Query.Append($" {Clauses.WHERE.ToString()} ");
             }
+        }
+
+        internal bool HasGroupByClause()
+        {
+            return Query.ToString().Contains(string.Join(" ", Clauses.GROUP_BY.ToString().Split("_")));
         }
 
         internal bool HasOrderClause()
@@ -517,7 +532,7 @@ namespace DapperGlib
             return Value;
         }
 
-        internal static string GetTableName()
+        public static string GetTableName()
         {
             PropertyInfo? schema = GetPropertyInfoByAttribute(typeof(Schema));
             PropertyInfo? tableAttribute = GetPropertyInfoByAttribute(typeof(TableName));

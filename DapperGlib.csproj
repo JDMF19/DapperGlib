@@ -9,8 +9,9 @@
     <RepositoryUrl>https://github.com/JDMF19/DapperGlib.git</RepositoryUrl>
     <PackageTags>Dapper;Database;Laravel;Eloquent;</PackageTags>
     <Authors>JDMF19</Authors>
-    <Version>1.2.6</Version>
+    <Version>1.2.7</Version>
     <Description>An easy way to interact with the database using Dapper inspired by Laravel</Description>
+    <PackageIcon>logo.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="img\logo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Update="README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

@@ -16,12 +16,15 @@ namespace DapperGlib
 
         public QueryBuilder(QueryBuilder<TModel> Clone)
         {
-            Query = Clone.Query;
-            SubQueries = Clone.SubQueries;
-            CountsRelationship = Clone.CountsRelationship;
-            OrderList = Clone.OrderList;
-            SkipString = Clone.SkipString;
-            TakeString = Clone.TakeString;
+            var deserializeSettings = new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace };
+
+            Query = new(Clone.Query.ToString());
+            SubQueries = JsonConvert.DeserializeObject<List<object>>(JsonConvert.SerializeObject(Clone.SubQueries), deserializeSettings) ?? new();
+            CountsRelationship = JsonConvert.DeserializeObject<List<string>>(JsonConvert.SerializeObject(Clone.CountsRelationship), deserializeSettings) ?? new();
+            OrderList = JsonConvert.DeserializeObject<List<string>>(JsonConvert.SerializeObject(Clone.OrderList), deserializeSettings) ?? new();
+            SelectList = JsonConvert.DeserializeObject<string[]>(JsonConvert.SerializeObject(Clone.SelectList), deserializeSettings) ?? Array.Empty<string>();
+            SkipString = Clone.SkipString?.Trim();
+            TakeString = Clone.TakeString?.Trim();
             ConditionsAdded = Clone.ConditionsAdded;
         }
 
@@ -31,6 +34,7 @@ namespace DapperGlib
         }
 
         #region CRUD
+        
         internal QueryBuilder<TModel> SimpleQuery()
         {
             string table = GetTableName();
@@ -255,9 +259,11 @@ namespace DapperGlib
 
             return Task.FromResult(result.Result);
         }
+        
         #endregion
 
         #region Retrieving
+
         public TModel First()
         {
             if (!CheckQueryInit())
@@ -270,6 +276,21 @@ namespace DapperGlib
             using var conection = _context.CreateConnection();
 
             var item = conection.QueryFirst<TModel>(query);
+            return item;
+        }
+
+        public T First<T>()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var item = conection.QueryFirst<T>(query);
             return item;
         }
 
@@ -287,6 +308,20 @@ namespace DapperGlib
             return item;
         }
 
+        public T? FirstOrDefault<T>()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+            var item = conection.QueryFirstOrDefault<T>(query);
+            return item;
+        }
+
         public Task<TModel> FirstAsync()
         {
             if (!CheckQueryInit())
@@ -299,6 +334,22 @@ namespace DapperGlib
             using var conection = _context.CreateConnection();
 
             var item = conection.QueryFirstAsync<TModel>(query)!;
+
+            return Task.FromResult(item.Result);
+        }
+
+        public Task<T> FirstAsync<T>()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var item = conection.QueryFirstAsync<T>(query)!;
 
             return Task.FromResult(item.Result);
         }
@@ -319,6 +370,22 @@ namespace DapperGlib
             return Task.FromResult(item.Result);
         }
 
+        public Task<T?> FirstOrDefaultAsync<T>()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var item = conection.QueryFirstOrDefaultAsync<T?>(query)!;
+
+            return Task.FromResult(item.Result);
+        }
+
         public List<TModel> ToList()
         {
 
@@ -326,6 +393,16 @@ namespace DapperGlib
 
             using var conection = _context.CreateConnection();
             var lista = conection.Query<TModel>(query);
+            return lista.ToList();
+        }
+
+        public List<T> ToList<T>()
+        {
+
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+            var lista = conection.Query<T>(query);
             return lista.ToList();
         }
 
@@ -340,6 +417,17 @@ namespace DapperGlib
             return Task.FromResult(lista.Result.ToList());
         }
 
+        public Task<List<T>> ToListAsync<T>()
+        {
+            string query = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var lista = conection.QueryAsync<T>(query);
+
+            return Task.FromResult(lista.Result.ToList());
+        }
+
         public int Count()
         {
             if (!CheckQueryInit())
@@ -347,9 +435,11 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
+            SelectList = new string[] { $"count(*) as CountColumn" };
+
             using var conection = _context.CreateConnection();
 
-            var result = conection.Query<int>(SqlAggregate("_selector_count"));
+            var result = conection.Query<int>(ToSql());
 
             return result.FirstOrDefault();
         }
@@ -361,9 +451,11 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
+            SelectList = new string[] { $"{Column} as ValueColumn" };
+
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<string>(SqlAggregate(Column));
+            var item = conection.QueryFirst<string>(ToSql());
 
             return item;
 
@@ -387,10 +479,12 @@ namespace DapperGlib
             {
                 SimpleQuery();
             }
+            //SelectList.Concat(new string[] { $"max({Column})" }).ToArray();
+            SelectList = new string[] { $"max({Column})" };
 
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(SqlAggregate($"max({Column})"));
+            var item = conection.QueryFirst<double>(ToSql());
 
             return item;
         }
@@ -401,10 +495,11 @@ namespace DapperGlib
             {
                 SimpleQuery();
             }
+            SelectList = new string[] { $"min({Column})" };
 
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(SqlAggregate($"min({Column})"));
+            var item = conection.QueryFirst<double>(ToSql());
 
             return item;
         }
@@ -416,9 +511,11 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
+            SelectList = new string[] { $"avg({Column})" };
+
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(SqlAggregate($"avg({Column})"));
+            var item = conection.QueryFirst<double>(ToSql());
 
             return item;
         }
@@ -430,14 +527,21 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
+            SelectList = new string[] { $"sum({Column})" };
+
             using var conection = _context.CreateConnection();
 
-            var item = conection.QueryFirst<double>(SqlAggregate($"sum({Column})"));
+            var item = conection.QueryFirst<double>(ToSql());
 
             return item;
         }
-
         #endregion
+
+        public QueryBuilder<TModel> Select(params string[] Columns)
+        {
+            SelectList = Columns;
+            return this;
+        }
 
         public QueryBuilder<TModel> Skip(int Rows)
         {
@@ -673,7 +777,7 @@ namespace DapperGlib
             return this;
         }
 
-        public QueryBuilder<TModel> WithCount(string Relationship)
+        public QueryBuilder<TModel> WithCount(string Relationship, string? Alias = null)
         {
 
             try
@@ -709,11 +813,13 @@ namespace DapperGlib
                 string countQuery = string.Concat(parts[0], $" = {OwnTable}.{result.LocalKey}").Replace("_selector_all", "count(*)");
 
                 var regex = new Regex(Regex.Escape("_selector_all"));
-                var match = regex.Match(Query.ToString());
+                var match = regex.Match(Query!.ToString());
 
                 int IndexSelector = match.Index + "_selector_all".Length;
 
-                CountsRelationship.Add($", ({countQuery}) as {Relationship}_Count ");
+                string alias = Alias ?? $"{Relationship}_Count";
+
+                CountsRelationship.Add($", ({countQuery}) as {alias} ");
 
                 string replaced = Query.ToString().Insert(IndexSelector, $" count_relationship_{CountsRelationship.Count} ");
 
@@ -724,6 +830,55 @@ namespace DapperGlib
                 throw new NullReferenceException("Relationship property not found on Model");
             }
 
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> GroupBy(params string[] Columns)
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            if (!HasGroupByClause())
+            {
+                string ClauseName = string.Join(" ", Clauses.GROUP_BY.ToString().Split("_"));
+                string cols = string.Join(",", Columns);
+
+                Query.Append($" {ClauseName} {cols} ");
+            }
+
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> Having(string Column, string ComparisonOperator, object Value)
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            if (!Query.ToString().Contains(Clauses.HAVING.ToString()) && HasGroupByClause())
+            {
+                Query.Append($" {Clauses.HAVING} {Column} {ComparisonOperator} {FormatValue(Value)}");
+            }
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> HavingRaw(string Raw)
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            if (!Query.ToString().Contains(Clauses.HAVING.ToString()) && HasGroupByClause())
+            {
+                Query.Append($" {Clauses.HAVING} {Raw} ");
+            }
 
             return this;
         }
@@ -814,7 +969,7 @@ namespace DapperGlib
             return Properties;
         }
 
-        internal QueryBuilder<TModel> Clone()
+        public QueryBuilder<TModel> Clone()
         {
             return new QueryBuilder<TModel>(this);
         }

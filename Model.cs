@@ -280,17 +280,32 @@ namespace DapperGlib
             var Builder = new QueryBuilder<T>();
             return Builder.Avg(Column);
         }
-        
+
         public static double Sum(string Column)
         {
             var Builder = new QueryBuilder<T>();
             return Builder.Sum(Column);
         }
+
+        public static string GetTableName()
+        {
+            return QueryBuilder<T>.GetTableName();
+        }
+
         #endregion
 
         public static QueryBuilder<T> Query()
         {
             var Builder = new QueryBuilder<T>().SimpleQuery();
+
+            return Builder;
+        }
+
+        public static QueryBuilder<T> Select(params string[] Columns)
+        {
+            var Builder = new QueryBuilder<T>().SimpleQuery();
+
+            Builder.Select(Columns);
 
             return Builder;
         }
