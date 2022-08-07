@@ -352,6 +352,53 @@ The query builder's delete method may be used to delete records from the table. 
 ```C#
 User.Where("Name", "Tom").Delete();
 ```
+### #Select Statements & Grouping
+
+#### #Specifying A Select Clause
+You may not always want to select all columns from a database table. Using the `Select` method, you can specify a custom "select" clause for the query:
+
+```C#
+var users = User.Select("Name", "Email").ToList();
+```
+
+You can create a class to save only the fields you want to select 
+Retrieving methods can receive a generic to map the response to a different class than the model
+
+```C#
+public class SelectUser
+{
+    public string Name { get; set; }
+    public string UserEmail { get; set; }
+}
+var users = User.Select("Name", "Email as UserEmail").ToList<SelectUser>();
+```
+#### #Grouping
+
+##### GroupBy
+
+As you might expect, the `GroupBy` method may be used to group the query results.
+
+```C#
+public class CategoriesWithMoreProducts
+{
+    public int CategoryId { get; set; }
+    public int Products { get; set; }
+}
+var categories = Product.Select("CategoryId","count(*) as Products").GroupBy("CategoryId").ToList<CategoriesWithMoreProducts>();
+```
+> The GroupBy method should always be used with the Select method!
+
+##### Having
+The `Having` method's signature is similar to that of the where method:
+
+```C#
+var categories = Product.Select("CategoryId","count(*) as Products").GroupBy("CategoryId").Having("CategoryId","=", 5).ToList<CategoriesWithMoreProducts>();
+```
+
+To build more advanced having statements, use the `HavingRaw` method.
+```C#
+var orders = Order.Select("Department","SUM(Price) as TotalSales").GroupBy("Department").HavingRaw("SUM(price) > 200").ToList();
+```
 
 ### #Ordering, Limit & Offset
 
@@ -385,7 +432,7 @@ var users = User.Take(10).ToList(); // returns the top 10 users
 var users = User.Skip(10).ToList(); // returns all users skipping the previous 10
 var users = User.Skip(10).Take(10).ToList(); // returns the next 10 users skipping the previous 10
 ```
-> #### The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
+> The Order and Limit methods should always be at the end of the query. you can't add any kind of conditional after them
 
 ### #Conditional Clauses
 
@@ -427,6 +474,28 @@ var products = Product.Distinct("Name, Price").ToList();
 ```
 > SQL Output: **select DISTINCT Name, Price from Product**
 
+### #Util
+
+You can get an instance of the QueryBuilder without conditions with the `Query` method:
+```C#
+var Builder = Product.Query();
+```
+You can clone an instance of the QueryBuilder using the `Clone` method:
+
+```C#
+var Builder1 = Product.Where("CategoryId", 5);
+var Builder2 = Builder1.Clone();
+```
+You can get the name of the table related to the Model with the `GetTableName` method:
+
+```C#
+string table = Product.GetTableName();
+```
+You can get the sql output from the QueryBuilder using the `ToSql` method:
+
+```C#
+string sql = Product.Where("CategoryId", 5).ToSql();
+```
 ## Relationships
 
 ### #Introduction
@@ -499,11 +568,18 @@ var user = User.Find(3);
 List<Comment> Comments = user.Comments.Where("Likes", ">", 50).ToList();
 ```
 
-You can also use the **WithCount** method to order by the number of records in a related table.
+You can also use the **WithCount** method to get the number of records in a relation
 
 ```C#
-var users = User.WithCount("Comments").OrderBy("Comments_Count").ToList();
+var users = User.WithCount("Comments").ToList();
 ```
+by default the return column name will be the name of the relation property followed by an underscore and the word Count, in this example it would be: `Comments_Count`
+you can change this by passing an alias as the second parameter.
+
+```C#
+var users = User.WithCount("Comments","NumComments").ToList();
+```
+
 > **Note: The string passed to the WithCount method must be the name of a relationship property in the model**
 
 ### #Querying Relationship Existence
