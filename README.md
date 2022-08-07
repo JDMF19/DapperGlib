@@ -1,5 +1,5 @@
 
-## DapperGlib
+![DapperGlib](https://github.com/JDMF19/DapperGlib/blob/master/img/logo_completo.png?raw=true)
 
 ### Introduction
 
