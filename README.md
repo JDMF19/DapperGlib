@@ -50,7 +50,7 @@ If your model's corresponding database table does not fit this convention, you m
 public class User : Model<User>
 {
     [TableName]
-    public override string? Table { get; } = "Users";
+    public override string? Table => "Users";
     ...
 }
 ```
@@ -63,7 +63,7 @@ If the table is within a schema it must be specified by overriding the Schema pr
 public class User : Model<User>
 {
     [Schema]
-    public override string? Schema { get; } = "UserSchema";
+    public override string? Schema => "UserSchema";
     ...
 }
 ```
@@ -80,7 +80,18 @@ public class User : Model<User>
     ...
 }
 ```
-> **In addition, We assumes that the primary key is an incrementing integer value**
+
+In addition, We assumes that the primary key is an incrementing integer value.  
+If you wish to use a non-incrementing or a non-numeric primary key you must define a public Incrementing property on your model that is set to false
+
+```C#
+public class User : Model<User>
+{
+    public override bool Incrementing => false;
+    ...
+}
+```
+
 
 #### #Fillable Properties
 Properties that are to be filled and are defined in the Model table must be specified with the **Fillable** attribute.
@@ -350,7 +361,18 @@ User.Where("Destination", "San Diego").Update(new {
 The query builder's delete method may be used to delete records from the table. You may constrain delete statements by adding "where" clauses before calling the delete method:
 
 ```C#
-User.Where("Name", "Tom").Delete();
+
+User.Query().Delete(); // Delete All records
+
+User.Where("Name", "Tom").Delete(); // Delete records with Name 'Tom'
+
+```
+If you wish to truncate an entire table, which will remove all records from the table and reset the auto-incrementing ID to zero, you may use the Truncate method:
+
+```C#
+
+User.Truncate();
+
 ```
 ### #Select Statements & Grouping
 
@@ -459,6 +481,22 @@ int TotalProductsWithDiscount  = Product.Where("Discount", ">", 0).Count();
 double MaxPriceDiscount = Product.Where("Discount", ">", 0).Max("Price");
 double TotalPriceDiscount = Product.Where("Discount", ">", 0).Sum("Price");
 ```
+#### #Determining If Records Exist
+
+Instead of using the count method to determine if any records exist that match your query's constraints, you may use the Exists and DoesntExist methods:
+
+```C#
+
+if(Product.Where("Discount", ">", 0).Exists()){
+  // ...
+}
+
+if(Product.Where("Discount", ">", 0).DoesntExist()){
+  // ...
+}
+
+```
+
 ### #Distinct
 The **Distinct** method allows you to force the query to return distinct results:
 
@@ -584,8 +622,9 @@ var users = User.WithCount("Comments","NumComments").ToList();
 
 ### #Querying Relationship Existence
 
-When retrieving model records, you may wish to limit your results based on the existence of a relationship. For these cases use **WhereHas** method
+When retrieving model records, you may wish to limit your results based on the existence of a relationship. For these cases use **WhereHas** and **OrWhereHas** method
 
+#### #WhereHas
 ```C#
 //Retrieve all users that have at least one comment...
 var users = User.WhereHas<Comment>("Comments").ToList();
@@ -611,9 +650,19 @@ var users = User.WhereHas<Comment>("Comments", (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }, ">=", 10).ToList();
 ```
-### #Querying Relationship Absence
-When retrieving model records, you may wish to limit your results based on the absence of a relationship. You can use **whereDoesntHave**
 
+#### #OrWhereHas
+The OrWhereHas method works in the same way as the WhereHas method but changing the AND operator to OR
+
+```C#
+//Retrieve all users that name is 'Tom' OR have at least one comment...
+var users = User.Where("Name", "Tom").OrWhereHas<Comment>("Comments").ToList();
+```
+
+### #Querying Relationship Absence
+When retrieving model records, you may wish to limit your results based on the absence of a relationship. You can use **WhereDoesntHave** and **OrWhereDoesntHave**
+
+#### #WhereDoesntHave
 ```C#
 //Retrieve all users that not have comments...
 var users = User.WhereDoesntHave<Comment>("Comments").ToList();
@@ -625,6 +674,12 @@ you can also pass a `closure` to add an additional constraint
 var users = User.WhereDoesntHave<Comment>("Comments", (Builder)=>{
     return Builder.Where("Likes", ">", 100);
 }).ToList();
+```
+#### #OrWhereDoesntHave
+
+```C#
+//Retrieve all users that name is 'Tom' or not have comments...
+var users = User.Where("Name", "Tom").OrWhereDoesntHave<Comment>("Comments").ToList();
 ```
 
 ## Still is Dapper
