@@ -149,27 +149,52 @@ namespace DapperGlib
 
         public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
-            WhereHasBuilder(Clauses.EXISTS, Relationship, Builder);
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.AND, Relationship, Builder);
             return this;
         }
 
         public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
         {
-            WhereHasBuilder<TRelationship>(Clauses.EXISTS, Relationship, null, ComparisonOperator, Value);
+            WhereHasBuilder<TRelationship>(Clauses.EXISTS, LogicalOperators.AND, Relationship, null, ComparisonOperator, Value);
             return this;
         }
 
         public SubQuery<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
         {
-            WhereHasBuilder(Clauses.EXISTS, Relationship, Builder, ComparisonOperator, Value);
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.AND, Relationship, Builder, ComparisonOperator, Value);
+            return this;
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        {
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.OR, Relationship, Builder);
+            return this;
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
+        {
+            WhereHasBuilder<TRelationship>(Clauses.EXISTS, LogicalOperators.OR, Relationship, null, ComparisonOperator, Value);
+            return this;
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
+        {
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.OR, Relationship, Builder, ComparisonOperator, Value);
             return this;
         }
 
         public SubQuery<TModel> WhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
-            WhereHasBuilder(Clauses.NOT_EXISTS, Relationship, Builder);
+            WhereHasBuilder(Clauses.NOT_EXISTS, LogicalOperators.AND, Relationship, Builder);
             return this;
         }
+
+        public SubQuery<TModel> OrWhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        {
+            WhereHasBuilder(Clauses.NOT_EXISTS, LogicalOperators.OR, Relationship, Builder);
+            return this;
+        }
+
 
         public SubQuery<TModel> When(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {

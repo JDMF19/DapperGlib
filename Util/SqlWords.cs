@@ -8,6 +8,6 @@ namespace DapperGlib.Util
 
     public enum Clauses
     {
-        WHERE, EXISTS, NOT_EXISTS, TOP, OFFSET, DISTINCT, ORDER_BY, GROUP_BY, HAVING, DELETE
+        WHERE, EXISTS, NOT_EXISTS, TOP, OFFSET, DISTINCT, ORDER_BY, GROUP_BY, HAVING, DELETE, TRUNCATE
     }
 }

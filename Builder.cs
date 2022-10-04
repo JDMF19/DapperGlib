@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using DapperGlib.Util;
+using System;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -139,10 +140,17 @@ namespace DapperGlib
                 }
 
                 string ExtraCondition = $" {reverse} ( {parts[1]} ) ";
+                int index = 0;
 
                 foreach (var item in SBuilder.SubQueries)
                 {
+                    index++;
+
                     SubQueries.Add(item);
+
+                    string validSubqueryIndex = $" SubQuery_{SubQueries.Count} ";
+
+                    ExtraCondition = ReplaceLastOccurrence(ExtraCondition, $"SubQuery_{index}", validSubqueryIndex).Trim();
                 }
 
                 Query.Append($" {ExtraCondition} ");
@@ -169,27 +177,10 @@ namespace DapperGlib
                 AddCondition(Column, "=", Value, Op);
             }
 
-            //try
-            //{
-
-
-            //}
-            //catch (NullReferenceException)
-            //{
-            //    throw new NullReferenceException("Column not found on fillable props");
-            //}
-            //catch (FormatException)
-            //{
-            //    throw new FormatException("Column value not match with column type");
-            //}
-            //catch (InvalidCastException)
-            //{
-            //    throw new FormatException("Column value not match with column type");
-            //}
 
         }
 
-        internal void WhereHasBuilder<TRelationship>(Clauses Clause, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
+        internal void WhereHasBuilder<TRelationship>(Clauses Clause, LogicalOperators Operator, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
         {
             if (CanAddCondition())
             {
@@ -200,14 +191,19 @@ namespace DapperGlib
 
                 if (property == null)
                 {
-                    throw new NullReferenceException("Relationship property not found on Model");
+                    throw new NullReferenceException($"Relationship property '{Relationship}' not found on Model '{Instance.GetType().Name}'");
+                }
+
+                if (property.PropertyType != typeof(Relationship<TRelationship>))
+                {
+                    throw new NullReferenceException($"Relationship property '{Relationship}' must be of type  'Relationship<{ReturnInstance.GetType().Name}>'");
                 }
 
                 var propertyValue = property.GetValue(Instance);
-
+              
                 if (propertyValue == null)
                 {
-                    throw new NullReferenceException("Relationship property not has a Relationship value");
+                    throw new NullReferenceException($"Relationship property '{Relationship}' not initialized");
                 }
 
                 Relationship<TRelationship> relationship = (Relationship<TRelationship>)propertyValue;
@@ -216,7 +212,7 @@ namespace DapperGlib
 
                 if (ConditionsAdded != 0)
                 {
-                    Query.Append($" {LogicalOperators.AND} ");
+                    Query.Append($" {Operator} ");
                 }
 
                 string Table = GetTableName(ReturnInstance);
@@ -282,9 +278,17 @@ namespace DapperGlib
 
                     string ExtraCondition = $"{parts[1]}";
 
+                    int index = 0;
                     foreach (var item in SBuilder.SubQueries)
                     {
+                        index++;
+
                         SubQueries.Add(item);
+
+                        string validSubqueryIndex = $" SubQuery_{SubQueries.Count} ";
+
+                        ExtraCondition = ReplaceLastOccurrence(ExtraCondition, $"SubQuery_{index}", validSubqueryIndex).Trim();
+
                     }
 
                     Query.Append($" {ExtraCondition} ");
@@ -503,6 +507,17 @@ namespace DapperGlib
         internal bool CheckQueryInit()
         {
             return Query != null && Query.ToString() != "";
+        }
+
+        internal static string ReplaceLastOccurrence(string Source, string Find, string Replace)
+        {
+            int place = Source.LastIndexOf(Find);
+
+            if (place == -1)
+                return Source;
+
+            string result = Source.Remove(place, Find.Length).Insert(place, Replace);
+            return result;
         }
 
         internal static object? FormatValue(object? Value)

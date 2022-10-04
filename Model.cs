@@ -11,6 +11,7 @@ namespace DapperGlib
 
         internal static readonly GlipContext _context = new();
 
+        public virtual bool Incrementing { get; } = true;
         public virtual string? Table { get; }
         public virtual string? Schema { get; }
 
@@ -142,6 +143,16 @@ namespace DapperGlib
             return new QueryBuilder<T>().SimpleDeleteAsync(this);
         }
 
+        public static void Truncate()
+        {
+            new QueryBuilder<T>().Truncate();
+        }
+
+        public static Task<int> TruncateAsync()
+        {
+            return new QueryBuilder<T>().TruncateAsync();
+        }
+
         #endregion
 
         #region Retrieving
@@ -221,6 +232,74 @@ namespace DapperGlib
         }
 
         public static Task<T?> FindOrDefaultAsync(int Id)
+        {
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
+
+            var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
+
+            using var conection = _context.CreateConnection();
+            var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToSql(), new { Id });
+
+            return Task.FromResult(item.Result);
+        }
+
+        public static T Find(string Id)
+        {
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
+
+            var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
+
+            using var conection = _context.CreateConnection();
+            var item = conection.QueryFirst<T>(Builder.ToSql(), new { Id });
+
+            return item;
+        }
+
+        public static Task<T> FindAsync(string Id)
+        {
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
+
+            var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
+
+            using var conection = _context.CreateConnection();
+            var item = conection.QueryFirstAsync<T>(Builder.ToSql(), new { Id });
+
+            return Task.FromResult(item.Result);
+        }
+
+        public static T? FindOrDefault(string Id)
+        {
+            string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
+
+            if (primaryKey == null)
+            {
+                throw new ApplicationException("Primary Key Column is not defined");
+            }
+
+            var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
+
+            using var conection = _context.CreateConnection();
+            var item = conection.QueryFirstOrDefault<T>(Builder.ToSql(), new { Id });
+
+            return item;
+        }
+
+        public static Task<T?> FindOrDefaultAsync(string Id)
         {
             string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
 

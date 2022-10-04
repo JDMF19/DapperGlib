@@ -48,18 +48,28 @@ namespace DapperGlib
 
             List<PropertyInfo> Properties = GetFillableProperties();
 
-            string[] Names = new string[Properties.Count];
-            object[] Values = new object[Properties.Count];
+            var primaryKey = GetPropertyInfoByAttribute(Item!, typeof(PrimaryKey));
+
+            int length = !IsIncrementing() && primaryKey != null ? Properties.Count + 1 : Properties.Count;
+
+            string[] Names = new string[length];
+            object[] Values = new object[length];
+
 
             foreach (var (item, index) in Properties.Select((item, index) => (item, index)))
             {
 
                 string PropertyName = item.Name;
-                object PropertyValue = item.GetValue(Item, null) ?? (new());
 
                 Names[index] = PropertyName;
                 Values[index] = $"@{PropertyName}";
 
+            }
+
+            if (!IsIncrementing() && primaryKey != null)
+            {
+                Names[length - 1] = primaryKey.Name;
+                Values[length - 1] = $"@{primaryKey.Name}";
             }
 
             string table = GetTableName();
@@ -150,7 +160,7 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defind");
+                throw new ApplicationException("Primary Key Column is not defined");
             }
 
             Query = new StringBuilder($"UPDATE {table} SET {String.Join(",", Values)} WHERE {primaryKey} = @{primaryKey}");
@@ -217,6 +227,28 @@ namespace DapperGlib
 
             using var conection = _context.CreateConnection();
             var result = conection.ExecuteAsync(ToSql(), Item);
+
+            return Task.FromResult(result.Result);
+        }
+
+        internal void Truncate()
+        {
+            string table = GetTableName();
+          
+            Query = new StringBuilder($"{Clauses.TRUNCATE} TABLE {table}");
+
+            using var conection = _context.CreateConnection();
+            conection.Execute(ToSql());
+        }
+
+        internal Task<int> TruncateAsync()
+        {
+            string table = GetTableName();
+       
+            Query = new StringBuilder($"{Clauses.TRUNCATE} TABLE {table}");
+
+            using var conection = _context.CreateConnection();
+            var result = conection.ExecuteAsync(ToSql());
 
             return Task.FromResult(result.Result);
         }
@@ -426,6 +458,38 @@ namespace DapperGlib
             var lista = conection.QueryAsync<T>(query);
 
             return Task.FromResult(lista.Result.ToList());
+        }
+
+        public bool Exists()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string sql = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var result = conection.Query<bool>($"SELECT 1 {Clauses.WHERE} {Clauses.EXISTS} ({sql})");
+
+            return result.FirstOrDefault();
+        }
+
+        public bool DoesntExist()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            string sql = ToSql();
+
+            using var conection = _context.CreateConnection();
+
+            var result = conection.Query<bool>($"SELECT 1 {Clauses.WHERE} {LogicalOperators.NOT} {Clauses.EXISTS} ({sql})");
+
+            return result.FirstOrDefault();
         }
 
         public int Count()
@@ -705,25 +769,49 @@ namespace DapperGlib
 
         public QueryBuilder<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
-            WhereHasBuilder(Clauses.EXISTS, Relationship, Builder);
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.AND, Relationship, Builder);
             return this;
         }
 
         public QueryBuilder<TModel> WhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
         {
-            WhereHasBuilder<TRelationship>(Clauses.EXISTS, Relationship, null, ComparisonOperator, Value);
+            WhereHasBuilder<TRelationship>(Clauses.EXISTS, LogicalOperators.AND, Relationship, null, ComparisonOperator, Value);
             return this;
         }
 
         public QueryBuilder<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
         {
-            WhereHasBuilder(Clauses.EXISTS, Relationship, Builder, ComparisonOperator, Value);
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.AND, Relationship, Builder, ComparisonOperator, Value);
+            return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        {
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.OR, Relationship, Builder);
+            return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(string Relationship, string ComparisonOperator, int Value)
+        {
+            WhereHasBuilder<TRelationship>(Clauses.EXISTS, LogicalOperators.OR, Relationship, null, ComparisonOperator, Value);
+            return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> Builder, string ComparisonOperator, int Value)
+        {
+            WhereHasBuilder(Clauses.EXISTS, LogicalOperators.OR, Relationship, Builder, ComparisonOperator, Value);
             return this;
         }
 
         public QueryBuilder<TModel> WhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
         {
-            WhereHasBuilder(Clauses.NOT_EXISTS, Relationship, Builder);
+            WhereHasBuilder(Clauses.NOT_EXISTS, LogicalOperators.AND, Relationship, Builder);
+            return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereDoesntHave<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
+        {
+            WhereHasBuilder(Clauses.NOT_EXISTS, LogicalOperators.OR, Relationship, Builder);
             return this;
         }
 
@@ -939,12 +1027,30 @@ namespace DapperGlib
             return primaryAttribute?.Name;
         }
 
+        internal static bool IsIncrementing()
+        {
+            PropertyInfo Incrementing = Instance.GetType().GetProperties().Where(prop => prop.Name == "Incrementing").First();
+
+            bool PropertyValue = (bool)Incrementing.GetValue(Instance, null)!;
+
+            return PropertyValue;
+        }
+
+        internal static bool IsIncrementing(object Instance)
+        {
+            PropertyInfo Incrementing = Instance.GetType().GetProperties().Where(prop => prop.Name == "Incrementing").First();
+
+            bool PropertyValue = (bool)Incrementing.GetValue(Instance, null)!;
+
+            return PropertyValue;
+        }
+
         internal static string? LastIdQuery()
         {
             string table = GetTableName();
             string? PrimaryKey = GetPrimaryKey();
 
-            if (PrimaryKey != null)
+            if (PrimaryKey != null && IsIncrementing())
             {
                 return $"SELECT TOP 1 {PrimaryKey} FROM {table} ORDER BY {PrimaryKey} DESC";
             }
