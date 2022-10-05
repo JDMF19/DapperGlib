@@ -1,6 +1,9 @@
 ﻿using Dapper;
 using DapperGlib.Util;
+using Newtonsoft.Json.Linq;
 using System;
+using System.Data.Common;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -160,21 +163,20 @@ namespace DapperGlib
           
         }
 
-        internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null)
+        internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null, object? ExtraValue = null)
         {
 
             //PropertyInfo? columnProp = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable)) && prop.Name == Column).FirstOrDefault();
-
 
             LogicalOperators Op = logicalOperators != null ? (LogicalOperators)logicalOperators : LogicalOperators.AND;
 
             if (ComparisonOperator != null)
             {
-                AddCondition(Column, ComparisonOperator, Value, Op);
+                AddCondition(Column, ComparisonOperator, Value, Op, ExtraValue);
             }
             else
             {
-                AddCondition(Column, "=", Value, Op);
+                AddCondition(Column, "=", Value, Op, ExtraValue);
             }
 
 
@@ -301,7 +303,26 @@ namespace DapperGlib
 
         }
 
-        internal void AddCondition(string Column, string ComparisonOperator, object? Value, LogicalOperators logicalOperators)
+        internal void AddRaw(string QueryRaw, LogicalOperators logicalOperators)
+        {
+            if (CanAddCondition())
+            {
+
+                AddWhereClause();
+
+                if (ConditionsAdded != 0)
+                {
+                    Query.Append($" {logicalOperators.ToString()} ");
+                }
+
+                Query.Append($" {QueryRaw} ");
+
+                ConditionsAdded += 1;
+
+            }
+        }
+
+        internal void AddCondition(string Column, string ComparisonOperator, object? Value, LogicalOperators logicalOperators, object? ExtraValue = null)
         {
             if (CanAddCondition())
             {
@@ -403,6 +424,36 @@ namespace DapperGlib
                         }
 
                         Query.Append($" DATEDIFF(DAY, {Table}.{Column}, {FormatValue(Value)}) = 0  ");
+
+                        break;
+                    case LogicalOperators.DATEDIFFYEAR:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+
+                        Query.Append($" DATEDIFF(YEAR, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+
+                        break;
+                    case LogicalOperators.DATEDIFFMONTH:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+
+                        Query.Append($" DATEDIFF(MONTH, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+
+                        break;
+                    case LogicalOperators.DATEDIFFDAY:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+
+                        Query.Append($" DATEDIFF(DAY, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
 
                         break;
                     case LogicalOperators.YEAR:

@@ -17,6 +17,19 @@ namespace DapperGlib
             Query = new StringBuilder(query);
         }
 
+
+        public SubQuery<TModel> WhereRaw(string Query)
+        {
+            AddRaw(Query, LogicalOperators.AND);
+            return this;
+        }
+
+        public SubQuery<TModel> OrWhereRaw(string Query)
+        {
+            AddRaw(Query, LogicalOperators.OR);
+            return this;
+        }
+
         public SubQuery<TModel> Where(string Column, object? Value)
         {
             InitWhere(Column, Value);
@@ -116,6 +129,43 @@ namespace DapperGlib
             InitWhere(Column, Value, null, LogicalOperators.DAY);
             return this;
         }
+
+        public SubQuery<TModel> WhereDateDiffYear(string Column, string Date, int Difference)
+        {
+            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFYEAR, Difference);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereDateDiffYear(string Column, string Date, string ComparisonOperator, int Difference)
+        {
+            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFYEAR, Difference);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereDateDiffMonth(string Column, string Date, int Difference)
+        {
+            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFMONTH, Difference);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereDateDiffMonth(string Column, string Date, string ComparisonOperator, int Difference)
+        {
+            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFMONTH, Difference);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereDateDiffDay(string Column, string Date, int Difference)
+        {
+            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFDAY, Difference);
+            return this;
+        }
+
+        public SubQuery<TModel> WhereDateDiffDay(string Column, string Date, string ComparisonOperator, int Difference)
+        {
+            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFDAY, Difference);
+            return this;
+        }
+
 
         public SubQuery<TModel> WhereColumn(string FirstColumn, string SecondColumn)
         {
