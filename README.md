@@ -307,6 +307,32 @@ The **WhereDay** method may be used to compare a column's value against a specif
 ```C#
 var users = User.WhereDay("Birthday", "01").ToList();
 ```
+> WhereDateDiffYear / WhereDateDiffMonth / WhereDateDiffDay 
+
+The **WhereDateDiffYear** method is used to compare the difference in years between a column of type date and a given date.
+
+**WhereDateDiffYear**, **WhereDateDiffMonth** and **WhereDateDiffDay** receive the same parameters. the first the column, second the date to compare and the difference. 
+
+```C#
+var users = User.WhereDateDiffYear("RegistrationDate", "2022/10/01", 3).ToList(); //Users who registered 3 years ago
+```
+Optionally you can also pass the comparison operator.
+
+```C#
+var users = User.WhereDateDiffYear("RegistrationDate", "2022/10/01", ">=", 3).ToList(); 
+```
+
+The **WhereDateDiffMonth** method is used to compare the difference in months between a column of type date and a given date.
+
+```C#
+var users = User.WhereDateDiffMonth("RegistrationDate", "2022/10/01", 6).ToList(); //Users who registered 6 months ago
+```
+
+The **WhereDateDiffDay** method is used to compare the difference in days between a column of type date and a given date.
+
+```C#
+var users = User.WhereDateDiffDay("RegistrationDate", "2022/10/01", 12).ToList(); //Users who registered 12 days ago
+```
 
 > WhereColumn
 
@@ -323,6 +349,14 @@ var users = User.WhereColumn("Name", "!=", "LastName").ToList();
 ```
 
 > **Note: The columns must be of the same type**
+
+> WhereRaw
+
+The **WhereRaw** method is used to pass your own query for the conditional.
+
+```C#
+var users = User.Query().WhereRaw("name = 'Math' and city = 'London' ").ToList();
+```
 
 #### #Logical Grouping
 
