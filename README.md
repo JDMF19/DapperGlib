@@ -23,6 +23,18 @@ in the **appsettings.json** file placed in the root folder of your startup proje
 }
 
 ```
+You can use multiple connections just adding another line like this:   
+
+
+```Json
+{
+  "ConnectionStrings": {
+    "SqlConnection": "Your connection string",
+    "AnotherSqlConnection": "Your connection string",
+  }
+}
+```
+
 ## Getting Started
 
 ### #Model Conventions
@@ -41,6 +53,27 @@ namespace App.Models
     }
 }
 ```
+
+The connection string by default is called **SqlConnection** if you use multiple connections or rename default connection string name you must specify it on Models
+
+
+```C#
+using DapperGlib;
+
+namespace App.Models
+{
+    public class User : Model<User>
+    {
+        public override string Connection { get; set; } = "AnotherSqlConnection";
+    
+        public User()
+        {
+        }
+    }
+}
+```
+
+
 #### #Table Names
 After looking at the example above, you may have noticed that we didn't specify which database table corresponds to our **User** Model. This is because the name of the Class will be used as the name of the table **unless** another name is explicitly specified. So in this case it will be assumed that the **User** model stores records in the User table
 
