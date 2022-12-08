@@ -3,12 +3,17 @@ using Microsoft.Extensions.Configuration;
 using System.Data;
 using System.Reflection;
 using System.IO;
+using System.Collections.Generic;
+using System.Collections;
 
 namespace DapperGlib
 {
     public class GlipContext
     {
-        private readonly string _coneccionString;
+
+      //  private List<string> _coneccions { get; set; } = new();
+
+        public Dictionary<string, string> Connections = new();
 
         public GlipContext()
         {
@@ -29,10 +34,29 @@ namespace DapperGlib
                                           .AddJsonFile("appsettings.json")
                                           .Build();
 
-            _coneccionString = configuration.GetConnectionString("SqlConnection");
+            var conecciones = configuration.GetSection("ConnectionStrings").GetChildren();
+
+            foreach(var item in conecciones)
+            {
+                Connections.Add(item.Key, item.Value);
+            }
+
+           /* _coneccionString = configuration.GetConnectionString("SqlConnection");*/
+
 
         }
 
-        public IDbConnection CreateConnection() => new SqlConnection(_coneccionString);
+        public IDbConnection CreateConnection(string ConnectionKey)
+        {
+
+            if (!Connections.ContainsKey(ConnectionKey))
+            {
+                throw new ArgumentException($"Key '{ConnectionKey}' not found on ConnectionStrings ");
+            }
+
+            var conectionString = Connections[ConnectionKey];
+
+            return new SqlConnection(conectionString);
+        }
     }
 }

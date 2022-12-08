@@ -73,7 +73,12 @@ namespace DapperGlib
             }
 
             string table = GetTableName();
-            Query = new StringBuilder($"INSERT INTO {table} ({String.Join(",", Names)}) VALUES ({String.Join(",", Values)}) ");
+            Query = new StringBuilder($" INSERT INTO {table} ({String.Join(",", Names)}) VALUES ({String.Join(",", Values)})  ");
+
+            if (IsIncrementing() && primaryKey != null)
+            {
+                Query.Append($"SELECT {primaryKey.Name} FROM {table} WHERE {primaryKey.Name} = @@IDENTITY");
+            }
 
             return this;
         }
@@ -104,7 +109,7 @@ namespace DapperGlib
 
             Query = new(replaced);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             conection.Execute(ToSql(), item);
         }
 
@@ -134,7 +139,7 @@ namespace DapperGlib
 
             Query = new(replaced);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var result = conection.ExecuteAsync(ToSql(), item);
             return Task.FromResult(result.Result);
         }
@@ -208,7 +213,7 @@ namespace DapperGlib
 
             Query = new StringBuilder($"{Clauses.DELETE} FROM {table} WHERE {primaryKey} = @{primaryKey}");
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             conection.Execute(ToSql(), Item);
 
         }
@@ -225,7 +230,7 @@ namespace DapperGlib
 
             Query = new StringBuilder($"{Clauses.DELETE} FROM {table} WHERE {primaryKey} = @{primaryKey}");
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var result = conection.ExecuteAsync(ToSql(), Item);
 
             return Task.FromResult(result.Result);
@@ -237,7 +242,7 @@ namespace DapperGlib
           
             Query = new StringBuilder($"{Clauses.TRUNCATE} TABLE {table}");
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             conection.Execute(ToSql());
         }
 
@@ -247,7 +252,7 @@ namespace DapperGlib
        
             Query = new StringBuilder($"{Clauses.TRUNCATE} TABLE {table}");
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var result = conection.ExecuteAsync(ToSql());
 
             return Task.FromResult(result.Result);
@@ -267,7 +272,7 @@ namespace DapperGlib
 
             Query = new(replaced);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             conection.Execute(ToSql());
 
         }
@@ -286,7 +291,7 @@ namespace DapperGlib
 
             Query = new(replaced);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var result = conection.ExecuteAsync(ToSql());
 
             return Task.FromResult(result.Result);
@@ -305,7 +310,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<TModel>(query);
             return item;
@@ -320,7 +325,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<T>(query);
             return item;
@@ -335,7 +340,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefault<TModel>(query);
             return item;
         }
@@ -349,7 +354,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefault<T>(query);
             return item;
         }
@@ -363,7 +368,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirstAsync<TModel>(query)!;
 
@@ -379,7 +384,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirstAsync<T>(query)!;
 
@@ -395,7 +400,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirstOrDefaultAsync<TModel?>(query)!;
 
@@ -411,7 +416,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirstOrDefaultAsync<T?>(query)!;
 
@@ -423,7 +428,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var lista = conection.Query<TModel>(query);
             return lista.ToList();
         }
@@ -433,7 +438,7 @@ namespace DapperGlib
 
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var lista = conection.Query<T>(query);
             return lista.ToList();
         }
@@ -442,7 +447,7 @@ namespace DapperGlib
         {
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var lista = conection.QueryAsync<TModel>(query);
 
@@ -453,7 +458,7 @@ namespace DapperGlib
         {
             string query = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var lista = conection.QueryAsync<T>(query);
 
@@ -469,7 +474,7 @@ namespace DapperGlib
 
             string sql = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var result = conection.Query<bool>($"SELECT 1 {Clauses.WHERE} {Clauses.EXISTS} ({sql})");
 
@@ -485,7 +490,7 @@ namespace DapperGlib
 
             string sql = ToSql();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var result = conection.Query<bool>($"SELECT 1 {Clauses.WHERE} {LogicalOperators.NOT} {Clauses.EXISTS} ({sql})");
 
@@ -499,7 +504,7 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var result = conection.Query<int>(SqlAggregate($"count(*) as CountColumn"));
 
@@ -513,7 +518,7 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<string>(SqlAggregate($"{Column} as ValueColumn"));
 
@@ -541,7 +546,7 @@ namespace DapperGlib
             }
             //SelectList.Concat(new string[] { $"max({Column})" }).ToArray();
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<double>(SqlAggregate($"max({Column})"));
 
@@ -555,7 +560,7 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<double>(SqlAggregate($"min({Column})"));
 
@@ -569,7 +574,7 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<double>(SqlAggregate($"avg({Column})"));
 
@@ -583,7 +588,7 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
 
             var item = conection.QueryFirst<double>(SqlAggregate($"sum({Column})"));
 
@@ -701,8 +706,7 @@ namespace DapperGlib
 
         public QueryBuilder<TModel> WhereIn(string Column, object[] Values)
         {
-
-            string stringValues = $"({string.Join(",", Values)})";
+            string stringValues = ParseWhereInValues(Values);
             InitWhere(Column, stringValues, null, LogicalOperators.IN);
             return this;
         }
@@ -1113,6 +1117,30 @@ namespace DapperGlib
             List<PropertyInfo> Properties = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable))).ToList();
 
             return Properties;
+        }
+
+        internal static string ParseWhereInValues(object[] Values)
+        {
+            var result = new StringBuilder("");
+
+            foreach (var item in Values)
+            {
+                var value = FormatValue(item);
+
+                if (result.ToString() != "")
+                {
+                    result.Append($",{value}");
+                }
+                else
+                {
+                    result.Append($"{value}");
+                }
+
+            }
+
+            string stringValues = $"({result})";
+
+            return stringValues;
         }
 
         public QueryBuilder<TModel> Clone()

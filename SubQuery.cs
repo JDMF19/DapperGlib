@@ -81,7 +81,7 @@ namespace DapperGlib
         public SubQuery<TModel> WhereIn(string Column, object[] Values)
         {
 
-            string stringValues = $"({string.Join(",", Values)})";
+            string stringValues = ParseWhereInValues(Values);
             InitWhere(Column, stringValues, null, LogicalOperators.IN);
             return this;
         }
@@ -250,6 +250,30 @@ namespace DapperGlib
         {
             InitWhen(Condition, Builder);
             return this;
+        }
+
+        internal static string ParseWhereInValues(object[] Values)
+        {
+            var result = new StringBuilder("");
+
+            foreach (var item in Values)
+            {
+                var value = FormatValue(item);
+
+                if (result.ToString() != "")
+                {
+                    result.Append($",{value}");
+                }
+                else
+                {
+                    result.Append($"{value}");
+                }
+
+            }
+
+            string stringValues = $"({result})";
+
+            return stringValues;
         }
 
     }

@@ -2,6 +2,7 @@
 using DapperGlib.Util;
 using Newtonsoft.Json;
 using System.Reflection;
+using System.Transactions;
 
 namespace DapperGlib
 {
@@ -9,11 +10,14 @@ namespace DapperGlib
     public abstract class Model<T> where T : Model<T>, new()
     {
 
+
         internal static readonly GlipContext _context = new();
 
         public virtual bool Incrementing { get; } = true;
         public virtual string? Table { get; }
         public virtual string? Schema { get; }
+        public virtual string Connection { get; set; } = "SqlConnection";
+
 
         protected static readonly object Instance = Activator.CreateInstance(typeof(T)) ?? (new());
 
@@ -28,21 +32,26 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().InsertQuery(this);
 
-            using var conection = _context.CreateConnection();
-            conection.Execute(Builder.ToSql(), this);
-
-            string? query = QueryBuilder<T>.LastIdQuery();
-
-            if (query != null)
+            using (var conection = _context.CreateConnection(GetConnectionString()))
             {
-                int LastId = conection.Query<int>(query).First();
 
-                PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
-
-                if (primaryAttribute != null)
+                if (QueryBuilder<T>.IsIncrementing())
                 {
-                    primaryAttribute.SetValue(this, LastId);
+                    int Identity = conection.Query<int>(Builder.ToSql(), this).First();
+
+                    PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+                    if (primaryAttribute != null)
+                    {
+                        primaryAttribute.SetValue(this, Identity);
+                    }
                 }
+                else
+                {
+                    conection.Execute(Builder.ToSql(), this);
+
+                }
+
             }
           
         }
@@ -52,20 +61,23 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().InsertQuery(Item);
 
-            using var conection = _context.CreateConnection();
-            conection.Execute(Builder.ToSql(), Item);
-
-            string? query = QueryBuilder<T>.LastIdQuery();
-
-            if (query != null)
+            using (var conection = _context.CreateConnection(GetConnectionString()))
             {
-                int LastId = conection.Query<int>(query).First();
-
-                PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
-
-                if (primaryAttribute != null)
+                if (QueryBuilder<T>.IsIncrementing())
                 {
-                    primaryAttribute.SetValue(Item, LastId);
+                    int Identity = conection.Query<int>(Builder.ToSql(), Item).First();
+
+                    PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+                    if (primaryAttribute != null)
+                    {
+                        primaryAttribute.SetValue(Item, Identity);
+                    }
+
+                }
+                else
+                {
+                    conection.Execute(Builder.ToSql(), Item);
                 }
             }
 
@@ -86,7 +98,7 @@ namespace DapperGlib
         {
             var Builder = new QueryBuilder<T>().UpdateQuery(this);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             conection.Execute(Builder.ToSql(), this);
         }
 
@@ -106,7 +118,7 @@ namespace DapperGlib
                 var Builder = new QueryBuilder<T>();
                 Builder.UpdateDynamicQuery<T>(args);
 
-                using var conection = _context.CreateConnection();
+                using var conection = _context.CreateConnection(GetConnectionString());
                 conection.Execute(Builder.ToSql(), item);
 
                 var Properties = args.GetType().GetProperties();
@@ -191,7 +203,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirst<T>(Builder.ToSql(), new { Id });
 
             return item;
@@ -208,7 +220,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstAsync<T>(Builder.ToSql(), new { Id });
 
             return Task.FromResult(item.Result);
@@ -225,7 +237,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefault<T>(Builder.ToSql(), new { Id });
 
             return item;
@@ -242,7 +254,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToSql(), new { Id });
 
             return Task.FromResult(item.Result);
@@ -259,7 +271,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirst<T>(Builder.ToSql(), new { Id });
 
             return item;
@@ -276,7 +288,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstAsync<T>(Builder.ToSql(), new { Id });
 
             return Task.FromResult(item.Result);
@@ -293,7 +305,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefault<T>(Builder.ToSql(), new { Id });
 
             return item;
@@ -310,7 +322,7 @@ namespace DapperGlib
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
-            using var conection = _context.CreateConnection();
+            using var conection = _context.CreateConnection(GetConnectionString());
             var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToSql(), new { Id });
 
             return Task.FromResult(item.Result);
@@ -369,6 +381,11 @@ namespace DapperGlib
         public static string GetTableName()
         {
             return QueryBuilder<T>.GetTableName();
+        }
+
+        public static string GetConnectionString()
+        {
+            return QueryBuilder<T>.GetConnectionString();
         }
 
         #endregion

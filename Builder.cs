@@ -616,6 +616,17 @@ namespace DapperGlib
             return table;
         }
 
+        public static string GetConnectionString()
+        {
+            PropertyInfo? connectionProperty = GetPropertyInfoByName("Connection");
+
+            var connectionPropertyValue = connectionProperty?.GetValue(Instance, null);
+
+            string? value = (connectionPropertyValue != null) ? (string)connectionPropertyValue : "SqlConnection";
+
+            return value;
+        }
+
         internal static string GetTableName(object Instance)
         {
             PropertyInfo? schema = GetPropertyInfoByAttribute(Instance, typeof(Schema));
@@ -633,6 +644,12 @@ namespace DapperGlib
         internal static PropertyInfo? GetPropertyInfoByAttribute(Type type)
         {
             PropertyInfo? proterty = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, type)).FirstOrDefault();
+            return proterty;
+        }
+
+        internal static PropertyInfo? GetPropertyInfoByName(string Name)
+        {
+            PropertyInfo? proterty = Instance.GetType().GetProperties().Where(prop => prop.Name == Name).FirstOrDefault();
             return proterty;
         }
 
