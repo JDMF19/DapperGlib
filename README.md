@@ -201,7 +201,15 @@ If you just need to retrieve a single row from a database table, you may use **F
 ```C#
 User user = User.First();
 ```
-and like this, the Model has a list of functions that will allow you to retrieve data from the database quickly
+
+
+#### #Find a record in Table
+If you just need to find a single row from a database table using **Primary Key*, you may use **Find** method:
+
+```C#
+User user = User.Find(10);
+```
+and like this, you have others versions of those methods
 
 * First
 * FirstOrDefault
