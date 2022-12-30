@@ -204,7 +204,7 @@ User user = User.First();
 
 
 #### #Find a record in Table
-If you just need to find a single row from a database table using **Primary Key*, you may use **Find** method:
+If you just need to find a single row from a database table using **Primary Key**, you may use **Find** method:
 
 ```C#
 User user = User.Find(10);
