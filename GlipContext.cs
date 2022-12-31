@@ -46,6 +46,19 @@ namespace DapperGlib
 
         }
 
+        public IDbConnection CreateConnection()
+        {
+
+            if (!Connections.ContainsKey("SqlConnection"))
+            {
+                throw new ArgumentException($"Key 'SqlConnection' not found on ConnectionStrings ");
+            }
+
+            var conectionString = Connections["SqlConnection"];
+
+            return new SqlConnection(conectionString);
+        }
+
         public IDbConnection CreateConnection(string ConnectionKey)
         {
 
