@@ -23,6 +23,8 @@ namespace DapperGlib
         internal string? SkipString { get; set; }
         internal string? TakeString { get; set; }
         internal int ConditionsAdded = 0;
+        internal bool UnderRelationship { get;set; } = false;
+        private bool ParenthesisAdded { get;set; } = false;
 
         public Builder()
         {
@@ -46,6 +48,7 @@ namespace DapperGlib
 
         internal string BuildQuery(string? ReplaceSelectorAggregate = null)
         {
+
             var QueryCopy = Query.ToString();
 
             if (ReplaceSelectorAggregate != null)
@@ -106,6 +109,7 @@ namespace DapperGlib
 
             QueryCopy = QueryCopy.Replace("_selector_all", "*");
             QueryCopy = QueryCopy.Replace("_selector_count", "count(*)");
+         
 
             int x = 1;
             foreach (var order in OrderList)
@@ -115,9 +119,26 @@ namespace DapperGlib
                 QueryCopy = QueryCopy.Replace(index, replace);
                 x++;
             }
-           
 
-            return Regex.Replace(QueryCopy, @"\s+"," ").Trim();
+            if (UnderRelationship && ParenthesisAdded)
+            {
+                QueryCopy = QueryCopy.Replace("__parenthesis__", " ( ");
+                var index = QueryCopy.IndexOf("ORDER BY");
+                if (index >= 0)
+                {
+                    QueryCopy = QueryCopy.Insert(index, " ) ");
+                }
+                else
+                {
+                    QueryCopy += " ) ";
+                }
+            }
+            else
+            {
+                QueryCopy = QueryCopy.Replace("__parenthesis__", "");
+            }
+
+            return Regex.Replace(QueryCopy, @"\s+", " ").Trim();
         }
 
         internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator, bool Reverse = false)
@@ -160,10 +181,10 @@ namespace DapperGlib
 
                 ConditionsAdded++;
             }
-          
+
         }
 
-        internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null, object? ExtraValue = null)
+        internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null, object? ExtraValue = null, bool Invert = false)
         {
 
             //PropertyInfo? columnProp = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable)) && prop.Name == Column).FirstOrDefault();
@@ -172,11 +193,11 @@ namespace DapperGlib
 
             if (ComparisonOperator != null)
             {
-                AddCondition(Column, ComparisonOperator, Value, Op, ExtraValue);
+                AddCondition(Column, ComparisonOperator, Value, Op, ExtraValue, Invert);
             }
             else
             {
-                AddCondition(Column, "=", Value, Op, ExtraValue);
+                AddCondition(Column, "=", Value, Op, ExtraValue, Invert);
             }
 
 
@@ -202,7 +223,7 @@ namespace DapperGlib
                 }
 
                 var propertyValue = property.GetValue(Instance);
-              
+
                 if (propertyValue == null)
                 {
                     throw new NullReferenceException($"Relationship property '{Relationship}' not initialized");
@@ -216,6 +237,8 @@ namespace DapperGlib
                 {
                     Query.Append($" {Operator} ");
                 }
+
+                AddParenthesisGroupRelationship();
 
                 string Table = GetTableName(ReturnInstance);
                 string OwnTable = GetTableName();
@@ -278,6 +301,8 @@ namespace DapperGlib
                         Query.Append($" {LogicalOperators.AND} ");
                     }
 
+                    AddParenthesisGroupRelationship();
+
                     string ExtraCondition = $"{parts[1]}";
 
                     int index = 0;
@@ -298,7 +323,7 @@ namespace DapperGlib
                     ConditionsAdded += 1;
                 }
 
-              
+
             }
 
         }
@@ -315,6 +340,8 @@ namespace DapperGlib
                     Query.Append($" {logicalOperators.ToString()} ");
                 }
 
+                AddParenthesisGroupRelationship();
+
                 Query.Append($" {QueryRaw} ");
 
                 ConditionsAdded += 1;
@@ -322,11 +349,12 @@ namespace DapperGlib
             }
         }
 
-        internal void AddCondition(string Column, string ComparisonOperator, object? Value, LogicalOperators logicalOperators, object? ExtraValue = null)
+        internal void AddCondition(string Column, string ComparisonOperator, object? Value, LogicalOperators logicalOperators, object? ExtraValue = null, bool Invert = false)
         {
             if (CanAddCondition())
             {
                 AddWhereClause();
+
 
                 string Table = GetTableName();
 
@@ -339,6 +367,8 @@ namespace DapperGlib
                         {
                             Query.Append($" {logicalOperators.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
+
 
                         Query.Append($" {Table}.{Column} {AndValue} ");
 
@@ -350,6 +380,8 @@ namespace DapperGlib
                         {
                             Query.Append($" {logicalOperators.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
+
 
                         Query.Append($" {Table}.{Column} {OrValue} ");
                         break;
@@ -359,6 +391,8 @@ namespace DapperGlib
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
+
 
                         Query.Append($" {Table}.{Column} {logicalOperators.ToString()} {Value} ");
 
@@ -369,6 +403,8 @@ namespace DapperGlib
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
+
 
                         Query.Append($" {Table}.{Column} {LogicalOperators.NOT.ToString()} {LogicalOperators.IN.ToString()} {Value} ");
 
@@ -381,6 +417,7 @@ namespace DapperGlib
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
 
                         object? NotValue = (Value == null) ? "IS NULL" : $"{ComparisonOperator} {FormatValue(Value)}";
 
@@ -397,6 +434,8 @@ namespace DapperGlib
                             {
                                 Query.Append($" {LogicalOperators.AND.ToString()} ");
                             }
+                            AddParenthesisGroupRelationship();
+
 
                             Between obj = (Between)Value;
 
@@ -422,50 +461,98 @@ namespace DapperGlib
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
+
 
                         Query.Append($" DATEDIFF(DAY, {Table}.{Column}, {FormatValue(Value)}) = 0  ");
-
-                        break;
-                    case LogicalOperators.DATEDIFFYEAR:
-
-                        if (ConditionsAdded != 0)
-                        {
-                            Query.Append($" {LogicalOperators.AND.ToString()} ");
-                        }
-
-                        Query.Append($" DATEDIFF(YEAR, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
-
-                        break;
-                    case LogicalOperators.DATEDIFFMONTH:
-
-                        if (ConditionsAdded != 0)
-                        {
-                            Query.Append($" {LogicalOperators.AND.ToString()} ");
-                        }
-
-                        Query.Append($" DATEDIFF(MONTH, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
-
-                        break;
-                    case LogicalOperators.DATEDIFFDAY:
-
-                        if (ConditionsAdded != 0)
-                        {
-                            Query.Append($" {LogicalOperators.AND.ToString()} ");
-                        }
-
-                        Query.Append($" DATEDIFF(DAY, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
 
                         break;
                     case LogicalOperators.YEAR:
                     case LogicalOperators.MONTH:
                     case LogicalOperators.DAY:
+                    case LogicalOperators.MINUTE:
 
                         if (ConditionsAdded != 0)
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
 
-                        Query.Append($" {logicalOperators}({Table}.{Column}) = {FormatValue(Value)} ");
+                        if (Invert)
+                        {
+                            Query.Append($" DATEDIFF({logicalOperators}, {Table}.{Column}, {FormatValue(Value)}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+                        }
+                        else
+                        {
+                            Query.Append($" DATEDIFF({logicalOperators}, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+                        }
+
+                        break;
+
+                    case LogicalOperators.WHEREYEAR:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" YEAR({Table}.{Column}) = {FormatValue(Value)} ");
+
+                        break;
+                    case LogicalOperators.WHEREMONTH:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" MONTH({Table}.{Column}) = {FormatValue(Value)} ");
+
+                        break;
+                    case LogicalOperators.WHEREDAY:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" DAY({Table}.{Column}) = {FormatValue(Value)} ");
+
+                        break;
+                    case LogicalOperators.ORWHEREYEAR:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.OR.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" YEAR({Table}.{Column}) = {FormatValue(Value)} ");
+
+                        break;
+                    case LogicalOperators.ORWHEREMONTH:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.OR.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" MONTH({Table}.{Column}) = {FormatValue(Value)} ");
+
+                        break;
+                    case LogicalOperators.ORWHEREDAY:
+
+                        if (ConditionsAdded != 0)
+                        {
+                            Query.Append($" {LogicalOperators.OR.ToString()} ");
+                        }
+                        AddParenthesisGroupRelationship();
+
+                        Query.Append($" DAY({Table}.{Column}) = {FormatValue(Value)} ");
 
                         break;
                     case LogicalOperators.DATEBETWEEN:
@@ -476,6 +563,7 @@ namespace DapperGlib
                             {
                                 Query.Append($" {LogicalOperators.AND.ToString()} ");
                             }
+                            AddParenthesisGroupRelationship();
 
                             DateBetween obj = (DateBetween)Value;
 
@@ -493,6 +581,7 @@ namespace DapperGlib
                         {
                             Query.Append($" {LogicalOperators.AND.ToString()} ");
                         }
+                        AddParenthesisGroupRelationship();
 
                         Query.Append($" {Table}.{Column} {ComparisonOperator} {Table}.{Value} ");
 
@@ -558,6 +647,17 @@ namespace DapperGlib
         internal bool CheckQueryInit()
         {
             return Query != null && Query.ToString() != "";
+        }
+
+        private void AddParenthesisGroupRelationship()
+        {
+
+            if (UnderRelationship && !ParenthesisAdded)
+            {
+                Query.Append(" __parenthesis__ ");
+                ParenthesisAdded = true;    
+            }
+
         }
 
         internal static string ReplaceLastOccurrence(string Source, string Find, string Replace)

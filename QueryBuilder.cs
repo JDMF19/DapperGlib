@@ -1,6 +1,8 @@
 ﻿using Dapper;
 using DapperGlib.Util;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -731,65 +733,75 @@ namespace DapperGlib
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDate(string Column, string Value)
+        public QueryBuilder<TModel> WhereDate(string Column, string Date)
         {
-            InitWhere(Column, Value, null, LogicalOperators.DATE);
+            InitWhere(Column, Date, null, LogicalOperators.DATE);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereYear(string Column, string Value)
+        public QueryBuilder<TModel> WhereYear(string Column, string Year)
         {
-            InitWhere(Column, Value, null, LogicalOperators.YEAR);
+            InitWhere(Column, Year, null, LogicalOperators.WHEREYEAR);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereMonth(string Column, string Value)
+        public QueryBuilder<TModel> WhereMonth(string Column, string Month)
         {
-            InitWhere(Column, Value, null, LogicalOperators.MONTH);
+            InitWhere(Column, Month, null, LogicalOperators.WHEREMONTH);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDay(string Column, string Value)
+        public QueryBuilder<TModel> WhereDay(string Column, string Day)
         {
-            InitWhere(Column, Value, null, LogicalOperators.DAY);
+            InitWhere(Column, Day, null, LogicalOperators.WHEREDAY);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffYear(string Column, string Date, int Difference)
+        public QueryBuilder<TModel> OrWhereYear(string Column, string Year)
         {
-            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFYEAR, Difference);
+            InitWhere(Column, Year, null, LogicalOperators.ORWHEREYEAR);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffYear(string Column, string Date, string ComparisonOperator, int Difference)
+        public QueryBuilder<TModel> OrWhereMonth(string Column, string Month)
         {
-            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFYEAR, Difference);
+            InitWhere(Column, Month, null, LogicalOperators.ORWHEREMONTH);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffMonth(string Column, string Date, int Difference)
+        public QueryBuilder<TModel> OrWhereDay(string Column, string Day)
         {
-            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFMONTH, Difference);
+            InitWhere(Column, Day, null, LogicalOperators.ORWHEREDAY);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffMonth(string Column, string Date, string ComparisonOperator, int Difference)
+        /// <summary>
+        ///    
+        /// </summary>
+        /// <param name="Invert">Reverses the order in the query of the Column and Date parameters</param>
+        /// <param name="ComparisonType">The comparison types are Year, Month, Day, Minute</param>
+        public QueryBuilder<TModel> WhereDateDiff(string Column, string Date, int Difference, DateDiff ComparisonType, bool Invert = false)
         {
-            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFMONTH, Difference);
+
+            LogicalOperators logicalOperator = Enum.TryParse(ComparisonType.ToString(), out LogicalOperators outValue) ? outValue : LogicalOperators.YEAR;
+
+            InitWhere(Column, Date, null, logicalOperator, Difference, Invert);
+
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffDay(string Column, string Date, int Difference)
+        /// <summary>
+        ///     
+        /// </summary>
+        /// <param name="Invert">Reverses the order in the query of the Column and Date parameters</param>
+        /// <param name="ComparisonType">The comparison types are Year, Month, Day, Minute</param>
+        public QueryBuilder<TModel> WhereDateDiff(string Column, string Date, string ComparisonOperator, int Difference, DateDiff ComparisonType, bool Invert = false)
         {
-            InitWhere(Column, Date, null, LogicalOperators.DATEDIFFDAY, Difference);
+            LogicalOperators logicalOperator = Enum.TryParse(ComparisonType.ToString(), out LogicalOperators outValue) ? outValue : LogicalOperators.YEAR;
+            InitWhere(Column, Date, ComparisonOperator, logicalOperator, Difference, Invert);
             return this;
         }
 
-        public QueryBuilder<TModel> WhereDateDiffDay(string Column, string Date, string ComparisonOperator, int Difference)
-        {
-            InitWhere(Column, Date, ComparisonOperator, LogicalOperators.DATEDIFFDAY, Difference);
-            return this;
-        }
 
         public QueryBuilder<TModel> WhereColumn(string FirstColumn, string SecondColumn)
         {

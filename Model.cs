@@ -2,7 +2,6 @@
 using DapperGlib.Util;
 using Newtonsoft.Json;
 using System.Reflection;
-using System.Transactions;
 
 namespace DapperGlib
 {
@@ -53,7 +52,7 @@ namespace DapperGlib
                 }
 
             }
-          
+
         }
 
         public static T Create(T Item)
@@ -466,10 +465,8 @@ namespace DapperGlib
 
         public static QueryBuilder<T> WhereIn(string Column, object[] Values)
         {
-
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereIn(Column, Values);
             return Builder;
-
         }
 
         public static QueryBuilder<T> WhereNotIn(string Column, object[] Values)
@@ -493,28 +490,50 @@ namespace DapperGlib
 
             return Builder;
         }
-      
-        public static QueryBuilder<T> WhereDate(string Column, string Value)
+
+        public static QueryBuilder<T> WhereDate(string Column, string Date)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDate(Column, Value);
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDate(Column, Date);
             return Builder;
         }
 
-        public static QueryBuilder<T> WhereYear(string Column, string Value)
+        public static QueryBuilder<T> WhereYear(string Column, string Year)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereYear(Column, Value);
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereYear(Column, Year);
             return Builder;
         }
 
-        public static QueryBuilder<T> WhereMonth(string Column, string Value)
+        public static QueryBuilder<T> WhereMonth(string Column, string Month)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereMonth(Column, Value);
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereMonth(Column, Month);
             return Builder;
         }
 
-        public static QueryBuilder<T> WhereDay(string Column, string Value)
+        public static QueryBuilder<T> WhereDay(string Column, string Day)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDay(Column, Value);
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDay(Column, Day);
+            return Builder;
+        }
+
+        /// <summary>
+        ///     
+        /// </summary>
+        /// <param name="Invert">Reverses the order in the query of the Column and Date parameters</param>
+        /// <param name="ComparisonType">The comparison types are Year, Month, Day, Minute</param>
+        public static QueryBuilder<T> WhereDateDiff(string Column, string Date, int Difference, DateDiff ComparisonType, bool Invert = false)
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDateDiff(Column, Date, Difference, ComparisonType, Invert);
+            return Builder;
+        }
+
+        /// <summary>
+        ///     
+        /// </summary>
+        /// <param name="Invert">Reverses the order in the query of the Column and Date parameters</param>
+        /// <param name="ComparisonType">The comparison types are Year, Month, Day, Minute</param>
+        public static QueryBuilder<T> WhereDateDiff(string Column, string Date, string ComparisonOperator, int Difference, DateDiff ComparisonType, bool Invert = false)
+        {
+            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDateDiff(Column, Date, ComparisonOperator, Difference, ComparisonType, Invert);
             return Builder;
         }
 
@@ -590,7 +609,7 @@ namespace DapperGlib
 
             QueryBuilder<T> Builder_ = new QueryBuilder<T>().SimpleQuery();
 
-            Builder_.When(Condition, Builder);  
+            Builder_.When(Condition, Builder);
 
             return Builder_;
         }
@@ -640,6 +659,7 @@ namespace DapperGlib
                 var localValue = Local.GetValue(this, null);
 
                 Relationship.Where(Relationship.ForeignKey, "=", localValue);
+                Relationship.UnderRelationship = true;
 
                 return Relationship;
             }
@@ -648,41 +668,7 @@ namespace DapperGlib
 
         }
 
-        //public Relationship<TRelationship> HasOne<TRelationship>(Relationship<TRelationship> Relationship)
-        //{
-
-        //    PropertyInfo? Local = Instance.GetType().GetProperty(Relationship.LocalKey);
-
-        //    if (Local != null)
-        //    {
-        //        var localValue = Local.GetValue(this, null);
-
-        //        Relationship.Where(Relationship.ForeignHey, "=", localValue);
-
-        //        return Relationship;
-        //    }
-
-        //    throw new ArgumentException($"Column {Relationship.LocalKey} not found");
-
-        //}
-
-        //public Relationship<TRelationship> HasMany<TRelationship>(Relationship<TRelationship> Relationship)
-        //{
-
-        //    PropertyInfo? Local = Instance.GetType().GetProperty(Relationship.LocalKey);
-
-        //    if (Local != null)
-        //    {
-        //        var localValue = Local.GetValue(this, null);
-
-        //        Relationship.Where(Relationship.ForeignHey, "=", localValue);
-
-        //        return Relationship;
-        //    }
-
-        //    throw new ArgumentException($"Column {Relationship.LocalKey} not found");
-
-        //}
+ 
 
     }
 
