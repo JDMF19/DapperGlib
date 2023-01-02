@@ -348,31 +348,32 @@ The **WhereDay** method may be used to compare a column's value against a specif
 ```C#
 var users = User.WhereDay("Birthday", "01").ToList();
 ```
-> WhereDateDiffYear / WhereDateDiffMonth / WhereDateDiffDay 
+> WhereDateDiff
 
-The **WhereDateDiffYear** method is used to compare the difference in years between a column of type date and a given date.
+The **WhereDateDiff** method is used to compare the difference between a column of type date and a given date.
 
-**WhereDateDiffYear**, **WhereDateDiffMonth** and **WhereDateDiffDay** receive the same parameters. the first the column, second the date to compare and the difference. 
+###### Parameters
+- Column
+- Date
+- ComparisonOperator (opcional)
+  * All comparison operators supported by sql server, default is **=**
+- Difference
+  * This is the difference to be expected in the comparison
+- ComparisonType
+  * It can be Year, Month, Day, Minute
+- Invert (opcional)
+  * Reverse the order of the first and second parameters this to control if the greatest date goes first or last
+
 
 ```C#
-var users = User.WhereDateDiffYear("RegistrationDate", "2022/10/01", 3).ToList(); //Users who registered 3 years ago
+using DapperGlib.Util;
+
+var users = User.WhereDateDiff("RegistrationDate", DateTime.Now.ToString(), 3, DateDiff.YEAR).ToList(); //Users who registered 3 years ago
 ```
 Optionally you can also pass the comparison operator.
 
 ```C#
-var users = User.WhereDateDiffYear("RegistrationDate", "2022/10/01", ">=", 3).ToList(); 
-```
-
-The **WhereDateDiffMonth** method is used to compare the difference in months between a column of type date and a given date.
-
-```C#
-var users = User.WhereDateDiffMonth("RegistrationDate", "2022/10/01", 6).ToList(); //Users who registered 6 months ago
-```
-
-The **WhereDateDiffDay** method is used to compare the difference in days between a column of type date and a given date.
-
-```C#
-var users = User.WhereDateDiffDay("RegistrationDate", "2022/10/01", 12).ToList(); //Users who registered 12 days ago
+var users = User.WhereDateDiff("RegistrationDate", DateTime.Now.ToString(), ">=", 3, DateDiff.YEAR).ToList(); 
 ```
 
 > WhereColumn
