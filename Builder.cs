@@ -1,8 +1,10 @@
 ﻿using Dapper;
+using DapperGlib.Exceptions;
 using DapperGlib.Util;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Data.Common;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -18,13 +20,15 @@ namespace DapperGlib
         internal StringBuilder Query { get; set; } = new StringBuilder();
         internal List<object> SubQueries { get; set; } = new();
         internal List<string> CountsRelationship { get; set; } = new();
+        internal QueryParameterContext ParameterContext { get; set; } = new();
+
         internal List<string> OrderList { get; set; } = new();
         internal string[] SelectList { get; set; } = Array.Empty<string>();
         internal string? SkipString { get; set; }
         internal string? TakeString { get; set; }
         internal int ConditionsAdded = 0;
-        internal bool UnderRelationship { get;set; } = false;
-        private bool ParenthesisAdded { get;set; } = false;
+        internal bool UnderRelationship { get; set; } = false;
+        private bool ParenthesisAdded { get; set; } = false;
 
         public Builder()
         {
@@ -37,6 +41,13 @@ namespace DapperGlib
         }
 
         public string ToSql()
+        {
+            string sql = BuildQuery();
+
+            return ExpandParameters(sql);
+        }
+
+        public string ToParameterizedSql()
         {
             return BuildQuery();
         }
@@ -69,11 +80,11 @@ namespace DapperGlib
 
                 if (genericBuilder.AsCondition)
                 {
-                    squery = $" ( {genericBuilder.ToSql()} ) {genericBuilder.ConditionOperator} {FormatValue(genericBuilder.ConditionValue)} ";
+                    squery = $" ( {genericBuilder.ToParameterizedSql()} ) {genericBuilder.ConditionOperator} {FormatValue(genericBuilder.ConditionValue)} ";
                 }
                 else
                 {
-                    squery = $" {clause} ( {genericBuilder.ToSql()} ) ";
+                    squery = $" {clause} ( {genericBuilder.ToParameterizedSql()} ) ";
                 }
 
                 QueryCopy = QueryCopy.Replace(index, squery);
@@ -109,7 +120,7 @@ namespace DapperGlib
 
             QueryCopy = QueryCopy.Replace("_selector_all", "*");
             QueryCopy = QueryCopy.Replace("_selector_count", "count(*)");
-         
+
 
             int x = 1;
             foreach (var order in OrderList)
@@ -144,7 +155,8 @@ namespace DapperGlib
         internal void GroupCondition(Func<SubQuery<TModel>, SubQuery<TModel>> Builder, LogicalOperators logicalOperator, bool Reverse = false)
         {
 
-            var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
+            var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS, ParameterContext));
+
             var parts = SBuilder.GetQuery().Split("WHERE");
 
             if (parts.Length == 2 && CanAddCondition())
@@ -214,19 +226,29 @@ namespace DapperGlib
 
                 if (property == null)
                 {
-                    throw new NullReferenceException($"Relationship property '{Relationship}' not found on Model '{Instance.GetType().Name}'");
+                    throw new RelationshipException(
+                        $"Relationship '{Relationship}' was not found " +
+                        $"on model '{Instance.GetType().Name}'."
+                    );
                 }
 
                 if (property.PropertyType != typeof(Relationship<TRelationship>))
                 {
-                    throw new NullReferenceException($"Relationship property '{Relationship}' must be of type  'Relationship<{ReturnInstance.GetType().Name}>'");
+                    throw new RelationshipException(
+                        $"Relationship '{Relationship}' on model " +
+                        $"'{Instance.GetType().Name}' must be of type " +
+                        $"'Relationship<{typeof(TRelationship).Name}>'."
+                    );
                 }
 
                 var propertyValue = property.GetValue(Instance);
 
                 if (propertyValue == null)
                 {
-                    throw new NullReferenceException($"Relationship property '{Relationship}' not initialized");
+                    throw new RelationshipException(
+                        $"Relationship '{Relationship}' on model " +
+                        $"'{Instance.GetType().Name}' is not initialized."
+                    );
                 }
 
                 Relationship<TRelationship> relationship = (Relationship<TRelationship>)propertyValue;
@@ -243,7 +265,7 @@ namespace DapperGlib
                 string Table = GetTableName(ReturnInstance);
                 string OwnTable = GetTableName();
 
-                SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{relationship.ForeignKey} = {OwnTable}.{relationship.LocalKey} ", Clause);
+                SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{relationship.ForeignKey} = {OwnTable}.{relationship.LocalKey} ", Clause, ParameterContext);
 
                 if (ComparisonOperator != null && Value != null)
                 {
@@ -252,6 +274,7 @@ namespace DapperGlib
                     SubQueryRelationship.AsCondition = true;
                     SubQueryRelationship.ConditionOperator = ComparisonOperator;
                     SubQueryRelationship.ConditionValue = Value;
+                    SubQueryRelationship.ConditionParameter = AddParameter(Value);
                 }
 
                 SubQueries.Add(SubQueryRelationship);
@@ -261,7 +284,7 @@ namespace DapperGlib
                 if (Builder != null)
                 {
 
-                    var SBuilder = Builder.Invoke(new("", Clause));
+                    var SBuilder = Builder.Invoke(new("", Clause, ParameterContext));
 
                     var parts = SBuilder.GetQuery().Split("WHERE");
 
@@ -288,7 +311,8 @@ namespace DapperGlib
         {
             if (Condition && CanAddCondition() && Builder != null)
             {
-                var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS));
+                var SBuilder = Builder.Invoke(new SubQuery<TModel>("", Clauses.EXISTS, ParameterContext));
+
                 var parts = SBuilder.GetQuery().Split("WHERE");
 
                 if (parts.Length == 2)
@@ -361,52 +385,64 @@ namespace DapperGlib
                 switch (logicalOperators)
                 {
                     case LogicalOperators.AND:
-                        object? AndValue = (Value == null) ? "IS NULL" : $"{ComparisonOperator} {FormatValue(Value)}";
+                        string AndValue = Value == null ? "IS NULL" : $"{ComparisonOperator} {AddParameter(Value)}";
 
                         if (ConditionsAdded != 0)
                         {
-                            Query.Append($" {logicalOperators.ToString()} ");
+                            Query.Append($" {logicalOperators} ");
                         }
+
                         AddParenthesisGroupRelationship();
 
-
-                        Query.Append($" {Table}.{Column} {AndValue} ");
+                        Query.Append(
+                            $" {Table}.{Column} {AndValue} "
+                        );
 
                         break;
                     case LogicalOperators.OR:
-                        object? OrValue = (Value == null) ? "IS NULL" : $"{ComparisonOperator} {FormatValue(Value)}";
+                        string OrValue = Value == null ? "IS NULL" : $"{ComparisonOperator} {AddParameter(Value)}";
 
                         if (ConditionsAdded != 0)
                         {
-                            Query.Append($" {logicalOperators.ToString()} ");
+                            Query.Append($" {logicalOperators} ");
                         }
+
                         AddParenthesisGroupRelationship();
 
-
-                        Query.Append($" {Table}.{Column} {OrValue} ");
+                        Query.Append(
+                            $" {Table}.{Column} {OrValue} "
+                        );
                         break;
                     case LogicalOperators.IN:
 
                         if (ConditionsAdded != 0)
                         {
-                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                            Query.Append($" {LogicalOperators.AND} ");
                         }
+
                         AddParenthesisGroupRelationship();
 
+                        string inParameter = AddParameter(Value);
 
-                        Query.Append($" {Table}.{Column} {logicalOperators.ToString()} {Value} ");
+                        Query.Append(
+                            $" {Table}.{Column} IN {inParameter} "
+                        );
 
                         break;
                     case LogicalOperators.NOT_IN:
 
                         if (ConditionsAdded != 0)
                         {
-                            Query.Append($" {LogicalOperators.AND.ToString()} ");
+                            Query.Append($" {LogicalOperators.AND} ");
                         }
+
                         AddParenthesisGroupRelationship();
 
+                        string notInParameter = AddParameter(Value);
 
-                        Query.Append($" {Table}.{Column} {LogicalOperators.NOT.ToString()} {LogicalOperators.IN.ToString()} {Value} ");
+                        Query.Append(
+                            $" {Table}.{Column} NOT IN {notInParameter} "
+                        );
 
                         break;
                     case LogicalOperators.LIKE:
@@ -439,8 +475,8 @@ namespace DapperGlib
 
                             Between obj = (Between)Value;
 
-                            var from = FormatValue(obj.From);
-                            var to = FormatValue(obj.To);
+                            var from = AddParameter(obj.From);
+                            var to = AddParameter(obj.To);
 
                             if (logicalOperators == LogicalOperators.NOT_BETWEEN)
                             {
@@ -463,8 +499,9 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
+                        string dateParameter = AddParameter(Value);
 
-                        Query.Append($" DATEDIFF(DAY, {Table}.{Column}, {FormatValue(Value)}) = 0  ");
+                        Query.Append($" DATEDIFF(DAY, {Table}.{Column}, {dateParameter}) = 0  ");
 
                         break;
                     case LogicalOperators.YEAR:
@@ -478,13 +515,16 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
+                        var valueParameter = AddParameter(Value);
+                        var differenceParameter = AddParameter(ExtraValue);
+
                         if (Invert)
                         {
-                            Query.Append($" DATEDIFF({logicalOperators}, {Table}.{Column}, {FormatValue(Value)}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+                            Query.Append($" DATEDIFF({logicalOperators}, {Table}.{Column}, {valueParameter}) {ComparisonOperator} {differenceParameter} ");
                         }
                         else
                         {
-                            Query.Append($" DATEDIFF({logicalOperators}, {FormatValue(Value)}, {Table}.{Column}) {ComparisonOperator} {FormatValue(ExtraValue)} ");
+                            Query.Append($" DATEDIFF({logicalOperators}, {valueParameter}, {Table}.{Column}) {ComparisonOperator} {differenceParameter} ");
                         }
 
                         break;
@@ -497,7 +537,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" YEAR({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" YEAR({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.WHEREMONTH:
@@ -508,7 +548,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" MONTH({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" MONTH({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.WHEREDAY:
@@ -519,7 +559,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" DAY({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" DAY({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.ORWHEREYEAR:
@@ -530,7 +570,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" YEAR({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" YEAR({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.ORWHEREMONTH:
@@ -541,7 +581,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" MONTH({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" MONTH({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.ORWHEREDAY:
@@ -552,7 +592,7 @@ namespace DapperGlib
                         }
                         AddParenthesisGroupRelationship();
 
-                        Query.Append($" DAY({Table}.{Column}) = {FormatValue(Value)} ");
+                        Query.Append($" DAY({Table}.{Column}) = {AddParameter(Value)} ");
 
                         break;
                     case LogicalOperators.DATEBETWEEN:
@@ -567,8 +607,8 @@ namespace DapperGlib
 
                             DateBetween obj = (DateBetween)Value;
 
-                            var from = FormatValue(obj.From);
-                            var to = FormatValue(obj.To);
+                            var from = AddParameter(obj.From);
+                            var to = AddParameter(obj.To);
 
                             Query.Append($" {Table}.{Column} {LogicalOperators.BETWEEN.ToString()} {from} {LogicalOperators.AND.ToString()} DATEADD(s,-1,DATEADD(d,1,{to})) ");
 
@@ -655,7 +695,7 @@ namespace DapperGlib
             if (UnderRelationship && !ParenthesisAdded)
             {
                 Query.Append(" __parenthesis__ ");
-                ParenthesisAdded = true;    
+                ParenthesisAdded = true;
             }
 
         }
@@ -671,35 +711,69 @@ namespace DapperGlib
             return result;
         }
 
-        internal static object? FormatValue(object? Value)
+        internal static string FormatValue(object? value)
         {
-            if (Value != null)
+            if (value == null)
             {
-
-                object? value;
-
-                switch (Value.GetType().Name)
-                {
-                    case "String":
-                        value = $"'{Value}'";
-                        break;
-                    case "Object":
-                        value = "''";
-                        break;
-                    case "DateTime":
-                        DateTime date = (DateTime)Value;
-                        value = $"'{date:yyyy-mm-dd hh:mm:ss}'";
-                        break;
-                    default:
-                        value = Value;
-                        break;
-                }
-
-
-                return value;
+                return "NULL";
             }
 
-            return Value;
+            if (value is Enum enumValue)
+            {
+                return Convert
+                    .ToInt64(enumValue)
+                    .ToString(CultureInfo.InvariantCulture);
+            }
+
+            return value switch
+            {
+                string text =>
+                    $"'{text.Replace("'", "''")}'",
+
+                char character =>
+                    $"'{character.ToString().Replace("'", "''")}'",
+
+                DateTime date =>
+                    $"'{date:yyyy-MM-dd HH:mm:ss.fff}'",
+
+                DateTimeOffset date =>
+                    $"'{date:yyyy-MM-dd HH:mm:ss.fff zzz}'",
+
+                bool boolean =>
+                    boolean ? "1" : "0",
+
+                Guid guid =>
+                    $"'{guid}'",
+
+                byte[] bytes =>
+                    $"0x{Convert.ToHexString(bytes)}",
+
+                IFormattable formattable =>
+                    formattable.ToString(
+                        null,
+                        CultureInfo.InvariantCulture
+                    ) ?? "NULL",
+
+                _ =>
+                    $"'{value.ToString()?.Replace("'", "''")}'"
+            };
+        }
+
+        protected static string EscapeLikePattern(string value)
+        {
+            return value
+                .Replace("[", "[[]")
+                .Replace("%", "[%]")
+                .Replace("_", "[_]");
+        }
+
+        public IReadOnlyDictionary<string, object?> GetBindings()
+        {
+            return ParameterContext.Values
+                .ToDictionary(
+                    item => $"@{item.Key}",
+                    item => item.Value
+                );
         }
 
         public static string GetTableName()
@@ -757,6 +831,125 @@ namespace DapperGlib
         {
             PropertyInfo? proterty = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, type)).FirstOrDefault();
             return proterty;
+        }
+
+        internal static string ParseWhereInValues<TValue>(string column, IEnumerable<TValue>? values, string methodName)
+        {
+            if (values == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(values),
+                    $"{methodName}('{column}') received a null collection."
+                );
+            }
+
+            var list = values.Cast<object?>().ToList();
+
+            if (list.Count == 0)
+            {
+                throw new ArgumentException(
+                    $"{methodName}('{column}') cannot receive an empty collection. " +
+                    $"SQL Server does not support an empty IN clause.",
+                    nameof(values)
+                );
+            }
+
+            var formattedValues = new List<string>();
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                var item = list[i];
+
+                if (item == null)
+                {
+                    throw new ArgumentException(
+                        $"{methodName}('{column}') contains a null value at index {i}. " +
+                        $"Use WhereNull() explicitly when querying NULL values.",
+                        nameof(values)
+                    );
+                }
+
+                try
+                {
+                    formattedValues.Add(FormatValue(item).ToString()!);
+                }
+                catch (Exception ex)
+                {
+                    throw new ArgumentException(
+                        $"{methodName}('{column}') could not format the value at index {i}. " +
+                        $"Value: '{item}'. Type: '{item.GetType().FullName}'.",
+                        nameof(values),
+                        ex
+                    );
+                }
+            }
+
+            return $"({string.Join(",", formattedValues)})";
+        }
+
+        internal string AddParameter(object? value)
+        {
+            return ParameterContext.Add(value);
+        }
+
+        internal DynamicParameters GetExecutionParameters(object? extraParameters = null)
+        {
+            var parameters = new DynamicParameters();
+
+            foreach (var parameter in ParameterContext.Values)
+            {
+                parameters.Add(
+                    parameter.Key,
+                    parameter.Value
+                );
+            }
+
+            if (extraParameters != null)
+            {
+                parameters.AddDynamicParams(extraParameters);
+            }
+
+            return parameters;
+        }
+
+        internal string ExpandParameters(string sql)
+        {
+            var parameters = ParameterContext.Values
+                .OrderByDescending(x => x.Key.Length);
+
+            foreach (var parameter in parameters)
+            {
+                sql = sql.Replace(
+                    $"@{parameter.Key}",
+                    FormatParameterForSql(parameter.Value)
+                );
+            }
+
+            return sql;
+        }
+
+        internal static string FormatParameterForSql(object? value)
+        {
+            if (value == null)
+            {
+                return "NULL";
+            }
+
+            if (value is System.Collections.IEnumerable enumerable &&
+                value is not string &&
+                value is not byte[])
+            {
+                var values = new List<string>();
+
+                foreach (var item in enumerable)
+                {
+                    values.Add(FormatValue(item));
+                }
+
+                return $"({string.Join(",", values)})";
+            }
+
+            return FormatValue(value);
         }
 
     }

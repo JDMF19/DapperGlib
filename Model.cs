@@ -1,4 +1,6 @@
 ﻿using Dapper;
+using DapperGlib.Exceptions;
+using DapperGlib.Interfaces;
 using DapperGlib.Util;
 using Newtonsoft.Json;
 using System.Reflection;
@@ -6,7 +8,7 @@ using System.Reflection;
 namespace DapperGlib
 {
 
-    public abstract class Model<T> where T : Model<T>, new()
+    public abstract class Model<T> : IModel where T : Model<T>, new()
     {
 
 
@@ -36,7 +38,7 @@ namespace DapperGlib
 
                 if (QueryBuilder<T>.IsIncrementing())
                 {
-                    int Identity = conection.Query<int>(Builder.ToSql(), this).First();
+                    int Identity = conection.Query<int>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(this)).First();
 
                     PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
 
@@ -47,7 +49,7 @@ namespace DapperGlib
                 }
                 else
                 {
-                    conection.Execute(Builder.ToSql(), this);
+                    conection.Execute(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(this));
 
                 }
 
@@ -64,7 +66,7 @@ namespace DapperGlib
             {
                 if (QueryBuilder<T>.IsIncrementing())
                 {
-                    int Identity = conection.Query<int>(Builder.ToSql(), Item).First();
+                    int Identity = conection.Query<int>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(Item)).First();
 
                     PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
 
@@ -76,7 +78,7 @@ namespace DapperGlib
                 }
                 else
                 {
-                    conection.Execute(Builder.ToSql(), Item);
+                    conection.Execute(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(Item));
                 }
             }
 
@@ -98,7 +100,7 @@ namespace DapperGlib
             var Builder = new QueryBuilder<T>().UpdateQuery(this);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            conection.Execute(Builder.ToSql(), this);
+            conection.Execute(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(this));
         }
 
         public void Update(dynamic args)
@@ -118,7 +120,7 @@ namespace DapperGlib
                 Builder.UpdateDynamicQuery<T>(args);
 
                 using var conection = _context.CreateConnection(GetConnectionString());
-                conection.Execute(Builder.ToSql(), item);
+                conection.Execute(Builder.ToParameterizedSql(), Builder.GetExecutionParameters(item));
 
                 var Properties = args.GetType().GetProperties();
 
@@ -197,30 +199,48 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirst<T>(Builder.ToSql(), new { Id });
+
+            var item = conection.QueryFirstOrDefault<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
+
+            if (item == null)
+            {
+                throw new ModelNotFoundException(
+                    typeof(T),
+                    Id
+                );
+            }
 
             return item;
         }
 
-        public static Task<T> FindAsync(int Id)
+        public static Task<T?> FindAsync(int Id)
         {
             string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstAsync<T>(Builder.ToSql(), new { Id });
+
+            var item = conection.QueryFirstOrDefaultAsync<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
+
+            if (item == null)
+            {
+                throw new ModelNotFoundException(
+                    typeof(T),
+                    Id
+                );
+            }
 
             return Task.FromResult(item.Result);
         }
@@ -231,13 +251,13 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstOrDefault<T>(Builder.ToSql(), new { Id });
+            var item = conection.QueryFirstOrDefault<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
 
             return item;
         }
@@ -248,13 +268,13 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToSql(), new { Id });
+            var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
 
             return Task.FromResult(item.Result);
         }
@@ -265,30 +285,50 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirst<T>(Builder.ToSql(), new { Id });
+
+            var item = conection.QueryFirstOrDefault<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
+
+            if (item == null)
+            {
+                throw new ModelNotFoundException(
+                    typeof(T),
+                    Id
+                );
+            }
+
 
             return item;
         }
 
-        public static Task<T> FindAsync(string Id)
+        public static Task<T?> FindAsync(string Id)
         {
             string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstAsync<T>(Builder.ToSql(), new { Id });
+
+            var item = conection.QueryFirstOrDefaultAsync<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
+
+            if (item == null)
+            {
+                throw new ModelNotFoundException(
+                    typeof(T),
+                    Id
+                );
+            }
+
 
             return Task.FromResult(item.Result);
         }
@@ -299,13 +339,13 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstOrDefault<T>(Builder.ToSql(), new { Id });
+            var item = conection.QueryFirstOrDefault<T>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
 
             return item;
         }
@@ -316,13 +356,13 @@ namespace DapperGlib
 
             if (primaryKey == null)
             {
-                throw new ApplicationException("Primary Key Column is not defined");
+                throw new ModelConfigurationException($"Primary key is not defined for model " + $"'{typeof(T).Name}'. " + $"Add the [PrimaryKey] attribute to the appropriate property.");
             }
 
             var Builder = new QueryBuilder<T>().Where(primaryKey, Id);
 
             using var conection = _context.CreateConnection(GetConnectionString());
-            var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToSql(), new { Id });
+            var item = conection.QueryFirstOrDefaultAsync<T?>(Builder.ToParameterizedSql(), Builder.GetExecutionParameters());
 
             return Task.FromResult(item.Result);
         }
@@ -351,6 +391,26 @@ namespace DapperGlib
         {
             var Builder = new QueryBuilder<T>();
             return Builder.Value(Column);
+        }
+
+        public static TValue Value<TValue>(string Column)
+        {
+            var Builder =
+                new QueryBuilder<T>();
+
+            return Builder.Value<TValue>(
+                Column
+            );
+        }
+
+        public static List<TValue> Pluck<TValue>(string Column)
+        {
+            var Builder =
+                new QueryBuilder<T>();
+
+            return Builder.Pluck<TValue>(
+                Column
+            );
         }
 
         public static double Max(string Column)
@@ -454,6 +514,24 @@ namespace DapperGlib
             return Builder_;
         }
 
+        public static QueryBuilder<T> WhereLike(string Column, string Pattern)
+        {
+            return new QueryBuilder<T>()
+                .WhereLike(
+                    Column,
+                    Pattern
+                );
+        }
+
+        public static QueryBuilder<T> WhereContains(string Column, string Value)
+        {
+            return new QueryBuilder<T>()
+                .WhereContains(
+                    Column,
+                    Value
+                );
+        }
+
         public static QueryBuilder<T> WhereNot(Func<SubQuery<T>, SubQuery<T>> Builder)
         {
             QueryBuilder<T> Builder_ = new QueryBuilder<T>();
@@ -463,18 +541,14 @@ namespace DapperGlib
             return Builder_;
         }
 
-        public static QueryBuilder<T> WhereIn(string Column, object[] Values)
+        public static QueryBuilder<T> WhereIn<TValue>(string column, IEnumerable<TValue> values)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereIn(Column, Values);
-            return Builder;
+            return new QueryBuilder<T>().WhereIn(column, values);
         }
 
-        public static QueryBuilder<T> WhereNotIn(string Column, object[] Values)
+        public static QueryBuilder<T> WhereNotIn<TValue>(string column, IEnumerable<TValue> values)
         {
-
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WhereNotIn(Column, Values);
-            return Builder;
-
+            return new QueryBuilder<T>().WhereNotIn(column, values);
         }
 
         public static QueryBuilder<T> WhereNull(string Column)
@@ -649,27 +723,55 @@ namespace DapperGlib
             return Builder;
         }
 
-        public Relationship<TRelationship> HasRelationship<TRelationship>(Relationship<TRelationship> Relationship)
+        public Relationship<TRelationship> HasRelationship<TRelationship>(Relationship<TRelationship> relationship)
         {
+            PropertyInfo? localProperty = this.GetType().GetProperty(relationship.LocalKey);
 
-            PropertyInfo? Local = Instance.GetType().GetProperty(Relationship.LocalKey);
-
-            if (Local != null)
+            if (localProperty == null)
             {
-                var localValue = Local.GetValue(this, null);
-
-                Relationship.Where(Relationship.ForeignKey, "=", localValue);
-                Relationship.UnderRelationship = true;
-
-                return Relationship;
+                throw new RelationshipException(
+                    $"Relationship configuration error on model '{GetType().Name}'. " +
+                    $"Local key property '{relationship.LocalKey}' was not found."
+                );
             }
 
-            throw new ArgumentException($"Column {Relationship.LocalKey} not found");
+            var localValue = localProperty.GetValue(this);
 
+            relationship.Bind(localValue);
+
+            return relationship;
         }
 
- 
+        /* public Lazy<List<TRelationship>> HasMany<TRelationship>( string ForeignKey, string? LocalKey = null)
+         {
 
+             LocalKey ??= ForeignKey;
+
+             PropertyInfo? Local = Instance.GetType().GetProperty(LocalKey);
+
+             if (Local != null)
+             {
+                 var localValue = Local.GetValue(this, null);
+
+                 var Builder = new QueryBuilder<TRelationship>();
+
+                 Builder.Where(ForeignKey, "=", localValue);
+                 Builder.UnderRelationship = true;
+
+                 *//*Builder.ToList().Select(x => new Lazy<TRelationship>(() => x)).ToList();*//*
+
+                 return new Lazy<List<TRelationship>>(() =>
+                 {
+                     return Builder.ToList();
+                 });
+
+             }
+
+             throw new ArgumentException($"Column {LocalKey} not found");
+
+         }
+
+ */
     }
 
 }

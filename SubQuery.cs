@@ -1,4 +1,7 @@
-﻿using DapperGlib.Util;
+﻿using DapperGlib.Exceptions;
+using DapperGlib.Util;
+using Newtonsoft.Json.Linq;
+using System.Data.Common;
 using System.Text;
 
 namespace DapperGlib
@@ -10,6 +13,7 @@ namespace DapperGlib
         internal bool AsCondition { get; set; } = false;
         internal string? ConditionOperator { get; set; }
         internal int? ConditionValue { get; set; }
+        internal string? ConditionParameter { get; set; }
 
         public SubQuery(string query, Clauses clause)
         {
@@ -17,6 +21,13 @@ namespace DapperGlib
             Query = new StringBuilder(query);
         }
 
+        internal SubQuery(string query, Clauses clause, QueryParameterContext parameterContext)
+        {
+            Clause = clause;
+            Query = new StringBuilder(query);
+
+            ParameterContext = parameterContext;
+        }
 
         public SubQuery<TModel> WhereRaw(string Query)
         {
@@ -48,6 +59,55 @@ namespace DapperGlib
             return this;
         }
 
+        public SubQuery<TModel> WhereLike(string Column, string Pattern)
+        {
+            if (string.IsNullOrWhiteSpace(Column))
+            {
+                throw new QueryBuilderException(
+                    "WhereLike requires a valid column name."
+                );
+            }
+
+            if (Pattern == null)
+            {
+                throw new QueryBuilderException(
+                    $"WhereLike('{Column}') cannot receive a null pattern."
+                );
+            }
+
+            InitWhere(
+                Column,
+                Pattern,
+                "LIKE"
+            );
+
+            return this;
+        }
+
+        public SubQuery<TModel> WhereContains( string Column, string Value)
+        {
+            if (string.IsNullOrWhiteSpace(Column))
+            {
+                throw new QueryBuilderException(
+                    "WhereContains requires a valid column name."
+                );
+            }
+
+            if (Value == null)
+            {
+                throw new QueryBuilderException(
+                    $"WhereContains('{Column}') cannot receive a null value."
+                );
+            }
+
+            string pattern =
+                $"%{EscapeLikePattern(Value)}%";
+
+            return WhereLike(
+                Column,
+                pattern
+            );
+        }
         public SubQuery<TModel> OrWhere(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
         {
             GroupCondition(Builder, LogicalOperators.OR);
@@ -78,19 +138,69 @@ namespace DapperGlib
             return this;
         }
 
-        public SubQuery<TModel> WhereIn(string Column, object[] Values)
+        public SubQuery<TModel> WhereIn<TValue>(string Column, IEnumerable<TValue> Values)
         {
+            if (Values == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(Values),
+                    $"WhereIn('{Column}') cannot receive null."
+                );
+            }
 
-            string stringValues = ParseWhereInValues(Values);
-            InitWhere(Column, stringValues, null, LogicalOperators.IN);
+            var list = Values.ToList();
+
+            if (list.Count == 0)
+            {
+                throw new ArgumentException(
+                    $"WhereIn('{Column}') cannot receive an empty collection.",
+                    nameof(Values)
+                );
+            }
+
+            InitWhere(
+                Column,
+                list,
+                null,
+                LogicalOperators.IN
+            );
+
             return this;
         }
 
-        public SubQuery<TModel> WhereNotIn(string Column, object[] Values)
+        public SubQuery<TModel> WhereNotIn<TValue>(string Column, IEnumerable<TValue> Values)
         {
+            if (Values == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(Values),
+                    $"WhereIn('{Column}') cannot receive null."
+                );
+            }
 
-            string stringValues = $"({string.Join(",", Values)})";
-            InitWhere(Column, stringValues, null, LogicalOperators.NOT_IN);
+            var list = Values.ToList();
+
+            if (list.Count == 0)
+            {
+                throw new ArgumentException(
+                    $"WhereIn('{Column}') cannot receive an empty collection.",
+                    nameof(Values)
+                );
+            }
+
+            string stringValues = ParseWhereInValues(
+                Column,
+                Values,
+                "WhereNotIn"
+            );
+
+            InitWhere(
+                Column,
+                stringValues,
+                null,
+                LogicalOperators.NOT_IN
+            );
+
             return this;
         }
 
@@ -259,29 +369,7 @@ namespace DapperGlib
             return this;
         }
 
-        internal static string ParseWhereInValues(object[] Values)
-        {
-            var result = new StringBuilder("");
 
-            foreach (var item in Values)
-            {
-                var value = FormatValue(item);
-
-                if (result.ToString() != "")
-                {
-                    result.Append($",{value}");
-                }
-                else
-                {
-                    result.Append($"{value}");
-                }
-
-            }
-
-            string stringValues = $"({result})";
-
-            return stringValues;
-        }
 
     }
 }

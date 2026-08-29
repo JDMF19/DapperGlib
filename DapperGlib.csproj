@@ -1,40 +1,84 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+
+    <TargetFrameworks>net6.0;net8.0;net10.0</TargetFrameworks>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PackageProjectUrl>https://github.com/JDMF19/DapperGlib.git</PackageProjectUrl>
+
+    <PackageProjectUrl>
+      https://github.com/JDMF19/DapperGlib.git
+    </PackageProjectUrl>
+
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/JDMF19/DapperGlib.git</RepositoryUrl>
-    <PackageTags>Dapper;Database;Laravel;Eloquent;</PackageTags>
+
+    <RepositoryUrl>
+      https://github.com/JDMF19/DapperGlib.git
+    </RepositoryUrl>
+
+    <RepositoryType>git</RepositoryType>
+
+    <PackageTags>
+      Dapper;Database;ORM;Laravel;Eloquent;SQLServer
+    </PackageTags>
+
     <Authors>JDMF19</Authors>
-    <Version>1.3.4.2</Version>
-    <Description>An easy way to interact with the database using Dapper inspired by Laravel</Description>
-    <PackageIcon>img\logo.png</PackageIcon>
+
+    <Version>1.4.0</Version>
+
+    <Description>
+      An easy way to interact with the database using Dapper inspired by Laravel Eloquent
+    </Description>
+
+    <PackageIcon>logo.png</PackageIcon>
+
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReleaseNotes>This beta changes dates methods </PackageReleaseNotes>
+
+    <PackageReleaseNotes>
+      Added parameterized queries, improved relationships,
+      CreateMany, WhereLike, WhereContains, generic Value and Pluck,
+      query bindings, custom exceptions, .NET 8 and .NET 10 support,
+      and updated dependencies.
+    </PackageReleaseNotes>
+
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+    <EnablePackageValidation>true</EnablePackageValidation>
+
   </PropertyGroup>
 
+
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.0.123" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="4.1.0" />
+
+    <PackageReference Include="Dapper" Version="2.1.79" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="6.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="System.Collections" Version="4.3.0" />
+
   </ItemGroup>
 
+
   <ItemGroup>
-    <None Update="img\logo.png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Update="README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
+
+    <None Remove="img\logo.png" />
+    <None Include="img\logo.png"
+          Pack="true"
+          PackagePath="" />
+
+    <None Remove="README.md" />
+    <None Include="README.md"
+          Pack="true"
+          PackagePath="" />
+
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Folder Include="Query\Grammar\" />
+    <Folder Include="Query\Processors\" />
   </ItemGroup>
 
 </Project>
