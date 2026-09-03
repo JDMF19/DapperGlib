@@ -9,9 +9,7 @@
         {
         }
 
-        public ModelConfigurationException(
-            string message,
-            Exception innerException)
+        public ModelConfigurationException(string message, Exception innerException)
             : base(
                 message,
                 innerException

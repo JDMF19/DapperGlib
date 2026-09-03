@@ -11,9 +11,11 @@ namespace DapperGlib
     public class GlipContext
     {
 
-      //  private List<string> _coneccions { get; set; } = new();
+        //  private List<string> _coneccions { get; set; } = new();
 
         public Dictionary<string, string> Connections = new();
+
+        public int? CommandTimeout { get; private set; }
 
         public GlipContext()
         {
@@ -36,12 +38,36 @@ namespace DapperGlib
 
             var conecciones = configuration.GetSection("ConnectionStrings").GetChildren();
 
-            foreach(var item in conecciones)
+            foreach (var item in conecciones)
             {
                 Connections.Add(item.Key, item.Value);
             }
 
-           /* _coneccionString = configuration.GetConnectionString("SqlConnection");*/
+
+            // Timeout global de DapperGlib
+            string? commandTimeoutValue = configuration["DapperGlib:CommandTimeout"];
+
+            if (!string.IsNullOrWhiteSpace(
+                commandTimeoutValue))
+            {
+                if (!int.TryParse(
+                    commandTimeoutValue,
+                    out int commandTimeout))
+                {
+                    throw new InvalidOperationException(
+                        "DapperGlib:CommandTimeout must be a valid integer."
+                    );
+                }
+
+                if (commandTimeout <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "DapperGlib:CommandTimeout must be greater than zero."
+                    );
+                }
+
+                CommandTimeout = commandTimeout;
+            }
 
 
         }

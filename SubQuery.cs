@@ -84,7 +84,7 @@ namespace DapperGlib
             return this;
         }
 
-        public SubQuery<TModel> WhereContains( string Column, string Value)
+        public SubQuery<TModel> WhereContains(string Column, string Value)
         {
             if (string.IsNullOrWhiteSpace(Column))
             {
@@ -138,31 +138,15 @@ namespace DapperGlib
             return this;
         }
 
+
         public SubQuery<TModel> WhereIn<TValue>(string Column, IEnumerable<TValue> Values)
         {
-            if (Values == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(Values),
-                    $"WhereIn('{Column}') cannot receive null."
-                );
-            }
-
-            var list = Values.ToList();
-
-            if (list.Count == 0)
-            {
-                throw new ArgumentException(
-                    $"WhereIn('{Column}') cannot receive an empty collection.",
-                    nameof(Values)
-                );
-            }
-
-            InitWhere(
+            InitWhereIn(
                 Column,
-                list,
-                null,
-                LogicalOperators.IN
+                Values,
+                LogicalOperators.IN,
+                nameof(WhereIn),
+                rejectNullValues: true
             );
 
             return this;
@@ -170,39 +154,17 @@ namespace DapperGlib
 
         public SubQuery<TModel> WhereNotIn<TValue>(string Column, IEnumerable<TValue> Values)
         {
-            if (Values == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(Values),
-                    $"WhereIn('{Column}') cannot receive null."
-                );
-            }
-
-            var list = Values.ToList();
-
-            if (list.Count == 0)
-            {
-                throw new ArgumentException(
-                    $"WhereIn('{Column}') cannot receive an empty collection.",
-                    nameof(Values)
-                );
-            }
-
-            string stringValues = ParseWhereInValues(
+            InitWhereIn(
                 Column,
                 Values,
-                "WhereNotIn"
-            );
-
-            InitWhere(
-                Column,
-                stringValues,
-                null,
-                LogicalOperators.NOT_IN
+                LogicalOperators.NOT_IN,
+                nameof(WhereNotIn),
+                rejectNullValues: true
             );
 
             return this;
         }
+
 
         public SubQuery<TModel> WhereNull(string Column)
         {
@@ -286,13 +248,49 @@ namespace DapperGlib
 
         public SubQuery<TModel> WhereColumn(string FirstColumn, string SecondColumn)
         {
-            InitWhere(FirstColumn, SecondColumn, null, LogicalOperators.COLUMN);
+            FirstColumn =
+                ValidateColumn(
+                    FirstColumn,
+                    nameof(WhereColumn)
+                );
+
+            SecondColumn =
+                ValidateColumn(
+                    SecondColumn,
+                    nameof(WhereColumn)
+                );
+
+            InitWhere(
+                FirstColumn,
+                SecondColumn,
+                null,
+                LogicalOperators.COLUMN
+            );
+
             return this;
         }
 
-        public SubQuery<TModel> WhereColumn(string FirstColumn, string ComparisonOperator, string SecondColumn)
+        public SubQuery<TModel> WhereColumn( string FirstColumn, string ComparisonOperator, string SecondColumn)
         {
-            InitWhere(FirstColumn, SecondColumn, ComparisonOperator, LogicalOperators.COLUMN);
+            FirstColumn =
+                ValidateColumn(
+                    FirstColumn,
+                    nameof(WhereColumn)
+                );
+
+            SecondColumn =
+                ValidateColumn(
+                    SecondColumn,
+                    nameof(WhereColumn)
+                );
+
+            InitWhere(
+                FirstColumn,
+                SecondColumn,
+                ComparisonOperator,
+                LogicalOperators.COLUMN
+            );
+
             return this;
         }
 

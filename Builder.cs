@@ -1,14 +1,13 @@
 ﻿using Dapper;
 using DapperGlib.Exceptions;
+using DapperGlib.Internal;
 using DapperGlib.Util;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Data.Common;
+using System.Data;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace DapperGlib
 {
@@ -28,6 +27,13 @@ namespace DapperGlib
         internal string? TakeString { get; set; }
         internal int ConditionsAdded = 0;
         internal bool UnderRelationship { get; set; } = false;
+
+        internal int? QueryCommandTimeout
+        {
+            get;
+            set;
+        }
+
         private bool ParenthesisAdded { get; set; } = false;
 
         public Builder()
@@ -198,21 +204,39 @@ namespace DapperGlib
 
         internal void InitWhere(string Column, object? Value, string? ComparisonOperator = null, LogicalOperators? logicalOperators = null, object? ExtraValue = null, bool Invert = false)
         {
+            Column =
+                ValidateColumn(
+                    Column,
+                    "Where"
+                );
 
-            //PropertyInfo? columnProp = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable)) && prop.Name == Column).FirstOrDefault();
-
-            LogicalOperators Op = logicalOperators != null ? (LogicalOperators)logicalOperators : LogicalOperators.AND;
+            LogicalOperators Op =
+                logicalOperators != null
+                    ? (LogicalOperators)logicalOperators
+                    : LogicalOperators.AND;
 
             if (ComparisonOperator != null)
             {
-                AddCondition(Column, ComparisonOperator, Value, Op, ExtraValue, Invert);
+                AddCondition(
+                    Column,
+                    ComparisonOperator,
+                    Value,
+                    Op,
+                    ExtraValue,
+                    Invert
+                );
             }
             else
             {
-                AddCondition(Column, "=", Value, Op, ExtraValue, Invert);
+                AddCondition(
+                    Column,
+                    "=",
+                    Value,
+                    Op,
+                    ExtraValue,
+                    Invert
+                );
             }
-
-
         }
 
         internal void WhereHasBuilder<TRelationship>(Clauses Clause, LogicalOperators Operator, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
@@ -833,59 +857,115 @@ namespace DapperGlib
             return proterty;
         }
 
-        internal static string ParseWhereInValues<TValue>(string column, IEnumerable<TValue>? values, string methodName)
+        internal static List<TValue> PrepareWhereInValues<TValue>(string column, IEnumerable<TValue>? values, string methodName, bool rejectNullValues)
         {
             if (values == null)
             {
                 throw new ArgumentNullException(
                     nameof(values),
-                    $"{methodName}('{column}') received a null collection."
+                    $"{methodName}('{column}') cannot receive a null collection."
                 );
             }
 
-            var list = values.Cast<object?>().ToList();
+            var list = values.ToList();
 
             if (list.Count == 0)
             {
                 throw new ArgumentException(
-                    $"{methodName}('{column}') cannot receive an empty collection. " +
-                    $"SQL Server does not support an empty IN clause.",
+                    $"{methodName}('{column}') cannot receive an empty collection.",
                     nameof(values)
                 );
             }
 
-            var formattedValues = new List<string>();
-
-            for (int i = 0; i < list.Count; i++)
+            if (rejectNullValues &&
+                list.Any(value => value is null))
             {
-                var item = list[i];
-
-                if (item == null)
-                {
-                    throw new ArgumentException(
-                        $"{methodName}('{column}') contains a null value at index {i}. " +
-                        $"Use WhereNull() explicitly when querying NULL values.",
-                        nameof(values)
-                    );
-                }
-
-                try
-                {
-                    formattedValues.Add(FormatValue(item).ToString()!);
-                }
-                catch (Exception ex)
-                {
-                    throw new ArgumentException(
-                        $"{methodName}('{column}') could not format the value at index {i}. " +
-                        $"Value: '{item}'. Type: '{item.GetType().FullName}'.",
-                        nameof(values),
-                        ex
-                    );
-                }
+                throw new ArgumentException(
+                    $"{methodName}('{column}') cannot contain null values. " +
+                    $"Use WhereNull() explicitly when querying NULL values.",
+                    nameof(values)
+                );
             }
 
-            return $"({string.Join(",", formattedValues)})";
+            return list;
         }
+
+        internal void InitWhereIn<TValue>(string column, IEnumerable<TValue>? values, LogicalOperators logicalOperator, string methodName, bool rejectNullValues)
+        {
+            column =
+                ValidateColumn(
+                    column,
+                    methodName
+                );
+
+            var list =
+                PrepareWhereInValues(
+                    column,
+                    values,
+                    methodName,
+                    rejectNullValues
+                );
+
+            InitWhere(
+                column,
+                list,
+                null,
+                logicalOperator
+            );
+        }
+
+        internal static string ValidateColumn(string? column, string methodName)
+        {
+            if (string.IsNullOrWhiteSpace(column))
+            {
+                throw new QueryBuilderException(
+                    $"{methodName} requires a valid column."
+                );
+            }
+
+            return column.Trim();
+        }
+
+        internal static string[] ValidateColumns(IEnumerable<string>? columns, string methodName)
+        {
+            if (columns == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(columns),
+                    $"{methodName} cannot receive a null column collection."
+                );
+            }
+
+            var columnList =
+                columns.ToArray();
+
+            if (columnList.Length == 0)
+            {
+                throw new QueryBuilderException(
+                    $"{methodName} requires at least one column."
+                );
+            }
+
+            var result =
+                new string[columnList.Length];
+
+            for (int i = 0; i < columnList.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(columnList[i]))
+                {
+                    throw new QueryBuilderException(
+                        $"{methodName} contains an invalid column " +
+                        $"at index {i}."
+                    );
+                }
+
+                result[i] =
+                    columnList[i].Trim();
+            }
+
+            return result;
+        }
+
 
         internal string AddParameter(object? value)
         {
@@ -928,6 +1008,364 @@ namespace DapperGlib
             return sql;
         }
 
+
+        internal CommandDefinition CreateCommand(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
+        {
+            return CommandDefinitionFactory
+                .Create(
+                    commandText:
+                        sql,
+
+                    parameters:
+                        GetExecutionParameters(
+                            extraParameters
+                        ),
+
+                    commandTimeout:
+                        GetCommandTimeout(),
+
+                    cancellationToken:
+                        cancellationToken
+                );
+        }
+
+        internal CommandDefinition CreateCommand(string commandText, DynamicParameters parameters, CommandType commandType, CancellationToken cancellationToken = default)
+        {
+            return new CommandDefinition(
+                commandText:
+                    commandText,
+
+                parameters:
+                    parameters,
+
+                commandTimeout:
+                    GetCommandTimeout(),
+
+                commandType:
+                    commandType,
+
+                cancellationToken:
+                    cancellationToken
+            );
+        }
+
+        internal int ExecuteCommand(string sql, object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command = CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection.Execute(
+                command
+            );
+        }
+
+        internal async Task<int> ExecuteCommandAsync(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return await connection
+                .ExecuteAsync(
+                    command
+                )
+                .ConfigureAwait(false);
+        }
+
+        internal TResult ExecuteScalar<TResult>(
+            string sql,
+            object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .ExecuteScalar<TResult>(
+                    command
+                )!;
+        }
+
+        internal async Task<TResult> ExecuteScalarAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return (
+                await connection
+                    .ExecuteScalarAsync<TResult>(
+                        command
+                    )
+                    .ConfigureAwait(false)
+            )!;
+        }
+
+        internal TResult QueryFirst<TResult>(
+    string sql,
+    object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .QueryFirst<TResult>(
+                    command
+                );
+        }
+
+        internal async Task<TResult> QueryFirstAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return await connection
+                .QueryFirstAsync<TResult>(
+                    command
+                )
+                .ConfigureAwait(false);
+        }
+
+        internal TResult? QueryFirstOrDefault<TResult>(
+            string sql,
+            object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .QueryFirstOrDefault<TResult>(
+                    command
+                );
+        }
+
+        internal async Task<TResult?> QueryFirstOrDefaultAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return await connection
+                .QueryFirstOrDefaultAsync<TResult>(
+                    command
+                )
+                .ConfigureAwait(false);
+        }
+
+        internal List<TResult> QueryList<TResult>(
+            string sql,
+            object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .Query<TResult>(
+                    command
+                )
+                .AsList();
+        }
+
+        internal async Task<List<TResult>> QueryListAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            var result =
+                await connection
+                    .QueryAsync<TResult>(
+                        command
+                    )
+                    .ConfigureAwait(false);
+
+            return result.AsList();
+        }
+
+        internal TResult QuerySingle<TResult>(
+    string sql,
+    object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .QuerySingle<TResult>(
+                    command
+                );
+        }
+
+
+        internal async Task<TResult> QuerySingleAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return await connection
+                .QuerySingleAsync<TResult>(
+                    command
+                )
+                .ConfigureAwait(false);
+        }
+
+
+        internal TResult? QuerySingleOrDefault<TResult>(
+            string sql,
+            object? extraParameters = null)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters
+                );
+
+            return connection
+                .QuerySingleOrDefault<TResult>(
+                    command
+                );
+        }
+
+
+        internal async Task<TResult?> QuerySingleOrDefaultAsync<TResult>(
+            string sql,
+            object? extraParameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var connection =
+                _context.CreateConnection(
+                    GetConnectionString()
+                );
+
+            var command =
+                CreateCommand(
+                    sql,
+                    extraParameters,
+                    cancellationToken
+                );
+
+            return await connection
+                .QuerySingleOrDefaultAsync<TResult>(
+                    command
+                )
+                .ConfigureAwait(false);
+        }
+
         internal static string FormatParameterForSql(object? value)
         {
             if (value == null)
@@ -950,6 +1388,11 @@ namespace DapperGlib
             }
 
             return FormatValue(value);
+        }
+
+        internal int? GetCommandTimeout()
+        {
+            return QueryCommandTimeout ?? _context.CommandTimeout;
         }
 
     }
