@@ -25,7 +25,7 @@
 
     <Authors>JDMF19</Authors>
 
-    <Version>1.4.0</Version>
+    <Version>1.4.5</Version>
 
     <Description>
       An easy way to interact with the database using Dapper inspired by Laravel Eloquent
@@ -35,11 +35,7 @@
 
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <PackageReleaseNotes>
-      Added parameterized queries, improved relationships,
-      CreateMany, WhereLike, WhereContains, generic Value and Pluck,
-      query bindings, custom exceptions, .NET 8 and .NET 10 support,
-      and updated dependencies.
+    <PackageReleaseNotes>Expands the library with real asynchronous execution, `CancellationToken`, generic primary keys, global and per-query command timeouts, native Stored Procedures, `QueryMultiple`, `Single` / `SingleOrDefault`, and a new Laravel-inspired `DB` API for direct Dapper queries without leaving DapperGlib.
     </PackageReleaseNotes>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
