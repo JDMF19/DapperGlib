@@ -1,4 +1,4 @@
-﻿namespace DapperGlib
+﻿namespace DapperGlib.Internal
 {
     internal sealed class QueryParameterContext
     {

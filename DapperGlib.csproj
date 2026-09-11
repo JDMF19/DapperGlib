@@ -25,7 +25,7 @@
 
     <Authors>JDMF19</Authors>
 
-    <Version>1.4.5</Version>
+    <Version>1.5.0</Version>
 
     <Description>
       An easy way to interact with the database using Dapper inspired by Laravel Eloquent
@@ -35,8 +35,7 @@
 
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <PackageReleaseNotes>Expands the library with real asynchronous execution, `CancellationToken`, generic primary keys, global and per-query command timeouts, native Stored Procedures, `QueryMultiple`, `Single` / `SingleOrDefault`, and a new Laravel-inspired `DB` API for direct Dapper queries without leaving DapperGlib.
-    </PackageReleaseNotes>
+    <PackageReleaseNotes>DapperGlib 1.5.0 adds CreateMany, InsertMany and BulkInsert APIs, improved async and CancellationToken support, safer transactions and connection handling, better SQL Server parameter chunking, stronger dynamic Create/Update validation, and multiple performance, security and reliability improvements.</PackageReleaseNotes>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 

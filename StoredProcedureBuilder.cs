@@ -8,6 +8,7 @@ namespace DapperGlib
     public class StoredProcedureBuilder
     {
         private readonly GlipContext _context = new();
+        private readonly DatabaseCommandExecutor _executor;
 
         private readonly string _connectionKey;
 
@@ -48,11 +49,11 @@ namespace DapperGlib
                 );
             }
 
-            ProcedureName =
-                procedureName.Trim();
+            ProcedureName = procedureName.Trim();
 
-            _connectionKey =
-                connectionKey.Trim();
+            _connectionKey = connectionKey.Trim();
+
+            _executor = new DatabaseCommandExecutor(_context);
         }
 
         public StoredProcedureBuilder Parameter<TValue>(string name, TValue value, DbType? dbType = null, int? size = null, byte? precision = null, byte? scale = null)
@@ -256,85 +257,41 @@ namespace DapperGlib
         }
 
 
-        private CommandDefinition CreateCommand(CancellationToken cancellationToken = default)
+        private CommandDefinition CreateCommand(CancellationToken cancellationToken = default, IDbTransaction? transaction = null)
         {
-            return CommandDefinitionFactory
-                .Create(
-                    commandText:
-                        ProcedureName,
-
-                    parameters:
-                        _parameters,
-
-                    commandTimeout:
-                        GetCommandTimeout(),
-
-                    commandType:
-                        CommandType.StoredProcedure,
-
-                    cancellationToken:
-                        cancellationToken
-                );
+            return CommandDefinitionFactory.Create(
+                commandText: ProcedureName,
+                parameters: _parameters,
+                commandTimeout: GetCommandTimeout(),
+                commandType: CommandType.StoredProcedure,
+                transaction: transaction,
+                cancellationToken: cancellationToken
+            );
         }
 
 
-        private TResult ExecuteCore<TResult>(
-    Func<
-        IDbConnection,
-        CommandDefinition,
-        TResult
-    > executor)
+        private TResult ExecuteCore<TResult>(Func<IDbConnection, CommandDefinition, TResult> executor)
         {
-            using var connection =
-                _context.CreateConnection(
-                    _connectionKey
-                );
+            return _executor.Execute(_connectionKey, context =>
+            {
+                CommandDefinition command = CreateCommand(transaction: context.Transaction);
+                TResult result = executor(context.Connection, command);
+                _hasExecuted = true;
 
-            CommandDefinition command =
-                CreateCommand();
-
-            TResult result =
-                executor(
-                    connection,
-                    command
-                );
-
-            _hasExecuted =
-                true;
-
-            return result;
+                return result;
+            });
         }
 
-
-        private async Task<TResult> ExecuteCoreAsync<TResult>(
-    Func<
-        IDbConnection,
-        CommandDefinition,
-        Task<TResult>
-    > executor,
-    CancellationToken cancellationToken)
+        private Task<TResult> ExecuteCoreAsync<TResult>(Func<IDbConnection, CommandDefinition, Task<TResult>> executor, CancellationToken cancellationToken)
         {
-            using var connection =
-                _context.CreateConnection(
-                    _connectionKey
-                );
+            return _executor.ExecuteAsync(_connectionKey, async context =>
+            {
+                CommandDefinition command = CreateCommand(cancellationToken, context.Transaction);
+                TResult result = await executor(context.Connection, command).ConfigureAwait(false);
+                _hasExecuted = true;
 
-            CommandDefinition command =
-                CreateCommand(
-                    cancellationToken
-                );
-
-            TResult result =
-                await executor(
-                    connection,
-                    command
-                )
-                .ConfigureAwait(false);
-
-            _hasExecuted =
-                true;
-
-            return result;
+                return result;
+            }, cancellationToken);
         }
 
 
@@ -631,41 +588,42 @@ namespace DapperGlib
         }
 
         /*
- * ============================================================
- * QUERY MULTIPLE
- * ============================================================
- */
+         * ============================================================
+         * QUERY MULTIPLE
+         * ============================================================
+         */
 
         public MultipleResultReader QueryMultiple()
         {
-            IDbConnection connection =
-                _context.CreateConnection(
+            DatabaseExecutionContextLease lease =
+                _executor.AcquireExecutionContext(
                     _connectionKey
                 );
 
             try
             {
-                CommandDefinition command =
-                    CreateCommand();
+                lease.Context.EnsureOpen();
+
+                CommandDefinition command = CreateCommand(transaction: lease.Context.Transaction);
 
                 SqlMapper.GridReader reader =
-                    connection.QueryMultiple(
+                    lease.Context.Connection.QueryMultiple(
                         command
                     );
 
                 return new MultipleResultReader(
-                    connection,
+                    lease.Context,
                     reader,
-                    () =>
-                    {
-                        _hasExecuted =
-                            true;
-                    }
+                    () => _hasExecuted = true,
+                    disposeExecutionContext: lease.OwnsContext
                 );
             }
             catch
             {
-                connection.Dispose();
+                if (lease.OwnsContext)
+                {
+                    lease.Context.Dispose();
+                }
 
                 throw;
             }
@@ -682,38 +640,43 @@ namespace DapperGlib
 
         public async Task<MultipleResultReader> QueryMultipleAsync(CancellationToken cancellationToken)
         {
-            IDbConnection connection =
-                _context.CreateConnection(
+            DatabaseExecutionContextLease lease =
+                _executor.AcquireExecutionContext(
                     _connectionKey
                 );
 
             try
             {
-                CommandDefinition command =
-                    CreateCommand(
+                await lease.Context
+                    .EnsureOpenAsync(
                         cancellationToken
-                    );
+                    )
+                    .ConfigureAwait(false);
+
+               CommandDefinition command = CreateCommand(cancellationToken, lease.Context.Transaction);
 
                 SqlMapper.GridReader reader =
-                    await connection
+                    await lease.Context.Connection
                         .QueryMultipleAsync(
                             command
                         )
                         .ConfigureAwait(false);
 
                 return new MultipleResultReader(
-                    connection,
+                    lease.Context,
                     reader,
-                    () =>
-                    {
-                        _hasExecuted =
-                            true;
-                    }
+                    () => _hasExecuted = true,
+                    disposeExecutionContext: lease.OwnsContext
                 );
             }
             catch
             {
-                connection.Dispose();
+                if (lease.OwnsContext)
+                {
+                    await lease.Context
+                        .DisposeAsync()
+                        .ConfigureAwait(false);
+                }
 
                 throw;
             }

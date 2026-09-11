@@ -2,16 +2,11 @@
 using Microsoft.Extensions.Configuration;
 using System.Data;
 using System.Reflection;
-using System.IO;
-using System.Collections.Generic;
-using System.Collections;
 
 namespace DapperGlib
 {
     public class GlipContext
     {
-
-        //  private List<string> _coneccions { get; set; } = new();
 
         public Dictionary<string, string> Connections = new();
 
@@ -74,28 +69,18 @@ namespace DapperGlib
 
         public IDbConnection CreateConnection()
         {
-
-            if (!Connections.ContainsKey("SqlConnection"))
-            {
-                throw new ArgumentException($"Key 'SqlConnection' not found on ConnectionStrings ");
-            }
-
-            var conectionString = Connections["SqlConnection"];
-
-            return new SqlConnection(conectionString);
+            return CreateSqlConnection("SqlConnection");
         }
 
-        public IDbConnection CreateConnection(string ConnectionKey)
+        public IDbConnection CreateConnection(string ConnectionString)
         {
-
-            if (!Connections.ContainsKey(ConnectionKey))
-            {
-                throw new ArgumentException($"Key '{ConnectionKey}' not found on ConnectionStrings ");
-            }
-
-            var conectionString = Connections[ConnectionKey];
-
-            return new SqlConnection(conectionString);
+            return CreateSqlConnection(ConnectionString);
         }
+
+        internal SqlConnection CreateSqlConnection(string ConnectionString)
+        {
+            return new SqlConnection(Connections[ConnectionString]);
+        }
+
     }
 }

@@ -15,6 +15,7 @@ namespace DapperGlib
     {
         internal static readonly object Instance = Activator.CreateInstance(typeof(TModel)) ?? (new());
         internal static readonly GlipContext _context = new();
+        internal static readonly DatabaseCommandExecutor _executor = new(_context);
 
         internal StringBuilder Query { get; set; } = new StringBuilder();
         internal List<object> SubQueries { get; set; } = new();
@@ -1009,362 +1010,157 @@ namespace DapperGlib
         }
 
 
-        internal CommandDefinition CreateCommand(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
+        internal CommandDefinition CreateCommand(string sql, object? extraParameters = null, CancellationToken cancellationToken = default, IDbTransaction? transaction = null)
         {
-            return CommandDefinitionFactory
-                .Create(
-                    commandText:
-                        sql,
-
-                    parameters:
-                        GetExecutionParameters(
-                            extraParameters
-                        ),
-
-                    commandTimeout:
-                        GetCommandTimeout(),
-
-                    cancellationToken:
-                        cancellationToken
-                );
+            return CommandDefinitionFactory.Create(
+                commandText: sql,
+                parameters: GetExecutionParameters(extraParameters),
+                commandTimeout: GetCommandTimeout(),
+                transaction: transaction,
+                cancellationToken: cancellationToken
+            );
         }
 
-        internal CommandDefinition CreateCommand(string commandText, DynamicParameters parameters, CommandType commandType, CancellationToken cancellationToken = default)
+        internal CommandDefinition CreateCommand(string commandText, DynamicParameters parameters, CommandType commandType, CancellationToken cancellationToken = default, IDbTransaction? transaction = null)
         {
-            return new CommandDefinition(
-                commandText:
-                    commandText,
-
-                parameters:
-                    parameters,
-
-                commandTimeout:
-                    GetCommandTimeout(),
-
-                commandType:
-                    commandType,
-
-                cancellationToken:
-                    cancellationToken
+            return CommandDefinitionFactory.Create(
+                commandText: commandText,
+                parameters: parameters,
+                commandTimeout: GetCommandTimeout(),
+                commandType: commandType,
+                transaction: transaction,
+                cancellationToken: cancellationToken
             );
         }
 
         internal int ExecuteCommand(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command = CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection.Execute(
-                command
-            );
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.Execute(command);
+            });
         }
 
         internal async Task<int> ExecuteCommandAsync(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return await connection
-                .ExecuteAsync(
-                    command
-                )
-                .ConfigureAwait(false);
+            return await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.ExecuteAsync(command);
+            }, cancellationToken).ConfigureAwait(false);
         }
 
-        internal TResult ExecuteScalar<TResult>(
-            string sql,
-            object? extraParameters = null)
+        internal TResult ExecuteScalar<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .ExecuteScalar<TResult>(
-                    command
-                )!;
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.ExecuteScalar<TResult>(command)!;
+            });
         }
 
-        internal async Task<TResult> ExecuteScalarAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<TResult> ExecuteScalarAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return (
-                await connection
-                    .ExecuteScalarAsync<TResult>(
-                        command
-                    )
-                    .ConfigureAwait(false)
-            )!;
+            return (await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.ExecuteScalarAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false))!;
         }
 
-        internal TResult QueryFirst<TResult>(
-    string sql,
-    object? extraParameters = null)
+        internal TResult QueryFirst<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .QueryFirst<TResult>(
-                    command
-                );
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.QueryFirst<TResult>(command);
+            });
         }
 
-        internal async Task<TResult> QueryFirstAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<TResult> QueryFirstAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return await connection
-                .QueryFirstAsync<TResult>(
-                    command
-                )
-                .ConfigureAwait(false);
+            return await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.QueryFirstAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false);
         }
 
-        internal TResult? QueryFirstOrDefault<TResult>(
-            string sql,
-            object? extraParameters = null)
+        internal TResult? QueryFirstOrDefault<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .QueryFirstOrDefault<TResult>(
-                    command
-                );
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.QueryFirstOrDefault<TResult>(command);
+            });
         }
 
-        internal async Task<TResult?> QueryFirstOrDefaultAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<TResult?> QueryFirstOrDefaultAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return await connection
-                .QueryFirstOrDefaultAsync<TResult>(
-                    command
-                )
-                .ConfigureAwait(false);
+            return await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.QueryFirstOrDefaultAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false);
         }
 
-        internal List<TResult> QueryList<TResult>(
-            string sql,
-            object? extraParameters = null)
+        internal List<TResult> QueryList<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .Query<TResult>(
-                    command
-                )
-                .AsList();
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.Query<TResult>(command).AsList();
+            });
         }
 
-        internal async Task<List<TResult>> QueryListAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<List<TResult>> QueryListAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            var result =
-                await connection
-                    .QueryAsync<TResult>(
-                        command
-                    )
-                    .ConfigureAwait(false);
+            IEnumerable<TResult> result = await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.QueryAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false);
 
             return result.AsList();
         }
 
-        internal TResult QuerySingle<TResult>(
-    string sql,
-    object? extraParameters = null)
+        internal TResult QuerySingle<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .QuerySingle<TResult>(
-                    command
-                );
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.QuerySingle<TResult>(command);
+            });
         }
 
-
-        internal async Task<TResult> QuerySingleAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<TResult> QuerySingleAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return await connection
-                .QuerySingleAsync<TResult>(
-                    command
-                )
-                .ConfigureAwait(false);
+            return await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.QuerySingleAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false);
         }
 
-
-        internal TResult? QuerySingleOrDefault<TResult>(
-            string sql,
-            object? extraParameters = null)
+        internal TResult? QuerySingleOrDefault<TResult>(string sql, object? extraParameters = null)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters
-                );
-
-            return connection
-                .QuerySingleOrDefault<TResult>(
-                    command
-                );
+            return _executor.Execute(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, transaction: context.Transaction);
+                return context.Connection.QuerySingleOrDefault<TResult>(command);
+            });
         }
 
-
-        internal async Task<TResult?> QuerySingleOrDefaultAsync<TResult>(
-            string sql,
-            object? extraParameters = null,
-            CancellationToken cancellationToken = default)
+        internal async Task<TResult?> QuerySingleOrDefaultAsync<TResult>(string sql, object? extraParameters = null, CancellationToken cancellationToken = default)
         {
-            using var connection =
-                _context.CreateConnection(
-                    GetConnectionString()
-                );
-
-            var command =
-                CreateCommand(
-                    sql,
-                    extraParameters,
-                    cancellationToken
-                );
-
-            return await connection
-                .QuerySingleOrDefaultAsync<TResult>(
-                    command
-                )
-                .ConfigureAwait(false);
+            return await _executor.ExecuteAsync(GetConnectionString(), context =>
+            {
+                CommandDefinition command = CreateCommand(sql, extraParameters, cancellationToken, context.Transaction);
+                return context.Connection.QuerySingleOrDefaultAsync<TResult>(command);
+            }, cancellationToken).ConfigureAwait(false);
         }
+
 
         internal static string FormatParameterForSql(object? value)
         {

@@ -2,8 +2,9 @@
 using DapperGlib.Exceptions;
 using DapperGlib.Interfaces;
 using DapperGlib.Util;
-using Newtonsoft.Json;
 using System.Reflection;
+using DapperGlib.Internal;
+using Microsoft.Data.SqlClient;
 using System.Threading;
 
 namespace DapperGlib
@@ -14,6 +15,8 @@ namespace DapperGlib
 
 
         internal static readonly GlipContext _context = new();
+
+        internal static readonly DatabaseCommandExecutor _executor = new(_context);
 
         public virtual bool Incrementing { get; } = true;
         public virtual string? Table { get; }
@@ -64,8 +67,7 @@ namespace DapperGlib
             );
         }
 
-        public async Task InsertAsync(
-            CancellationToken cancellationToken)
+        public async Task InsertAsync(CancellationToken cancellationToken)
         {
             var builder =
                 new QueryBuilder<T>()
@@ -136,6 +138,24 @@ namespace DapperGlib
             return Item;
         }
 
+        public static T Create(object args)
+        {
+            var operation = PrepareDynamicCreate(args);
+
+            if (QueryBuilder<T>.IsIncrementing())
+            {
+                object? primaryKeyValue = operation.Builder.ExecuteScalar<object?>(operation.Builder.ToParameterizedSql(), operation.Parameters);
+
+                AssignGeneratedPrimaryKey(operation.Item, primaryKeyValue);
+            }
+            else
+            {
+                operation.Builder.ExecuteCommand(operation.Builder.ToParameterizedSql(), operation.Parameters);
+            }
+
+            return operation.Item;
+        }
+
         public static Task<T> CreateAsync(T Item)
         {
             return CreateAsync(
@@ -185,6 +205,127 @@ namespace DapperGlib
             }
 
             return Item;
+        }
+
+        public static Task<T> CreateAsync(object args)
+        {
+            return CreateDynamicAsyncCore(args, CancellationToken.None);
+        }
+
+        public static Task<T> CreateAsync(object args, CancellationToken cancellationToken)
+        {
+            return CreateDynamicAsyncCore(args, cancellationToken);
+        }
+
+
+        public static List<T> CreateMany(IEnumerable<T> items)
+        {
+            List<T> itemsList = PrepareManyItems(items, nameof(CreateMany));
+
+            if (itemsList.Count == 0)
+            {
+                return new List<T>();
+            }
+
+            ExecuteCreateMany(itemsList);
+
+            return itemsList;
+        }
+
+        public static Task<List<T>> CreateManyAsync(IEnumerable<T> items)
+        {
+            return CreateManyAsync(items, CancellationToken.None);
+        }
+
+        public static async Task<List<T>> CreateManyAsync(IEnumerable<T> items, CancellationToken cancellationToken)
+        {
+            List<T> itemsList = PrepareManyItems(items, nameof(CreateManyAsync));
+
+            if (itemsList.Count == 0)
+            {
+                return new List<T>();
+            }
+
+            await ExecuteCreateManyAsync(itemsList, cancellationToken).ConfigureAwait(false);
+
+            return itemsList;
+        }
+
+        public static void InsertMany(IEnumerable<T> items)
+        {
+            List<T> itemsList = PrepareManyItems(items, nameof(InsertMany));
+
+            if (itemsList.Count == 0)
+            {
+                return;
+            }
+
+            ExecuteInsertMany(itemsList);
+        }
+
+        public static Task InsertManyAsync(IEnumerable<T> items)
+        {
+            return InsertManyAsync(items, CancellationToken.None);
+        }
+
+        public static Task InsertManyAsync(IEnumerable<T> items, CancellationToken cancellationToken)
+        {
+            List<T> itemsList = PrepareManyItems(items, nameof(InsertManyAsync));
+
+            if (itemsList.Count == 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return ExecuteInsertManyAsync(itemsList, cancellationToken);
+        }
+
+        public static void BulkInsert(IEnumerable<T> items)
+        {
+            IReadOnlyList<T> itemsList = PrepareBulkItems(items, nameof(BulkInsert));
+
+            if (itemsList.Count == 0)
+            {
+                return;
+            }
+
+            ExecuteBulkInsert(itemsList);
+        }
+
+        public static Task BulkInsertAsync(IEnumerable<T> items)
+        {
+            return BulkInsertAsync(items, CancellationToken.None);
+        }
+
+        public static Task BulkInsertAsync(IEnumerable<T> items, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<T> itemsList = PrepareBulkItems(items, nameof(BulkInsertAsync));
+
+            if (itemsList.Count == 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return ExecuteBulkInsertAsync(itemsList, cancellationToken);
+        }
+
+
+        private static async Task<T> CreateDynamicAsyncCore(object args, CancellationToken cancellationToken)
+        {
+            var operation = PrepareDynamicCreate(args);
+
+            if (QueryBuilder<T>.IsIncrementing())
+            {
+                object? primaryKeyValue = await operation.Builder.ExecuteScalarAsync<object?>(operation.Builder.ToParameterizedSql(), operation.Parameters, cancellationToken).ConfigureAwait(false);
+
+                AssignGeneratedPrimaryKey(operation.Item, primaryKeyValue);
+            }
+            else
+            {
+                await operation.Builder.ExecuteCommandAsync(operation.Builder.ToParameterizedSql(), operation.Parameters, cancellationToken).ConfigureAwait(false);
+            }
+
+            return operation.Item;
         }
 
         public static void UpdateAll(dynamic args)
@@ -244,22 +385,11 @@ namespace DapperGlib
 
         public void Update(dynamic args)
         {
-            var operation =
-                PrepareDynamicUpdate(
-                    (object)args
-                );
+            var operation = PrepareDynamicUpdate((object)args);
 
-            operation.Builder
-                .ExecuteCommand(
-                    operation.Builder
-                        .ToParameterizedSql(),
-                    operation.Item
-                );
+            operation.Builder.ExecuteCommand(operation.Builder.ToParameterizedSql(), operation.Parameters);
 
-            ApplyDynamicUpdateValues(
-                (object)args,
-                operation.Properties
-            );
+            ApplyDynamicUpdateValues((object)args, operation.Properties);
         }
 
         public Task UpdateAsync(dynamic args)
@@ -280,24 +410,11 @@ namespace DapperGlib
 
         private async Task UpdateDynamicAsyncCore(object args, CancellationToken cancellationToken)
         {
-            var operation =
-                PrepareDynamicUpdate(
-                    args
-                );
+            var operation = PrepareDynamicUpdate(args);
 
-            await operation.Builder
-                .ExecuteCommandAsync(
-                    operation.Builder
-                        .ToParameterizedSql(),
-                    operation.Item,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            await operation.Builder.ExecuteCommandAsync(operation.Builder.ToParameterizedSql(), operation.Parameters, cancellationToken).ConfigureAwait(false);
 
-            ApplyDynamicUpdateValues(
-                args,
-                operation.Properties
-            );
+            ApplyDynamicUpdateValues(args, operation.Properties);
         }
 
         public void Delete()
@@ -1377,63 +1494,455 @@ namespace DapperGlib
         }
 
 
-        private (QueryBuilder<T> Builder, T Item, PropertyInfo[] Properties) PrepareDynamicUpdate(object args)
+        private static (QueryBuilder<T> Builder, T Item, DynamicParameters Parameters) PrepareDynamicCreate(object args)
         {
-            PropertyInfo? primaryAttribute =
-                QueryBuilder<T>
-                    .GetPropertyInfoByAttribute(
-                        typeof(PrimaryKey)
-                    );
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            PropertyInfo[] properties = args.GetType().GetProperties();
+
+            if (properties.Length == 0)
+            {
+                throw new QueryBuilderException("Create requires at least one property to insert.");
+            }
+
+            PropertyInfo primaryKey = GetRequiredPrimaryKeyProperty();
+            bool incrementing = QueryBuilder<T>.IsIncrementing();
+
+            Dictionary<string, PropertyInfo> modelProperties = typeof(T).GetProperties().ToDictionary(property => property.Name, property => property, StringComparer.OrdinalIgnoreCase);
+
+            var parameters = new DynamicParameters();
+            var names = new List<string>();
+            T item = new();
+
+            foreach (PropertyInfo sourceProperty in properties)
+            {
+                if (!modelProperties.TryGetValue(sourceProperty.Name, out PropertyInfo? modelProperty))
+                {
+                    throw new QueryBuilderException($"Property '{sourceProperty.Name}' does not exist on model '{typeof(T).Name}'.");
+                }
+
+                bool isPrimaryKey = string.Equals(modelProperty.Name, primaryKey.Name, StringComparison.OrdinalIgnoreCase);
+                bool isFillable = Attribute.IsDefined(modelProperty, typeof(Fillable));
+
+                if (isPrimaryKey && incrementing)
+                {
+                    throw new QueryBuilderException($"Primary key '{primaryKey.Name}' cannot be provided because model '{typeof(T).Name}' uses an incrementing primary key.");
+                }
+
+                if (!isPrimaryKey && !isFillable)
+                {
+                    throw new QueryBuilderException($"Property '{modelProperty.Name}' is not marked with [Fillable] on model '{typeof(T).Name}'.");
+                }
+
+                object? value = sourceProperty.GetValue(args, null);
+
+                parameters.Add(modelProperty.Name, value);
+                names.Add(modelProperty.Name);
+
+                AssignDynamicPropertyValue(item, modelProperty, value);
+            }
+
+            if (!incrementing && !names.Any(name => string.Equals(name, primaryKey.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new QueryBuilderException($"Primary key '{primaryKey.Name}' must be provided because model '{typeof(T).Name}' does not use an incrementing primary key.");
+            }
+
+            var builder = new QueryBuilder<T>().InsertDynamicQuery(names);
+
+            return (builder, item, parameters);
+        }
+
+        private (QueryBuilder<T> Builder, DynamicParameters Parameters, PropertyInfo[] Properties) PrepareDynamicUpdate(object args)
+        {
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+
+            PropertyInfo? primaryAttribute = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
 
             if (primaryAttribute == null)
             {
-                /*
-                 * Se conserva ArgumentException por compatibilidad
-                 * con el comportamiento público anterior.
-                 */
-                throw new ArgumentException(
-                    "Column Primary Key not found"
-                );
+                throw new ArgumentException("Column Primary Key not found");
             }
 
-            object? primaryKeyValue =
-                primaryAttribute.GetValue(
-                    this,
-                    null
-                );
+            PropertyInfo[] properties = args.GetType().GetProperties();
 
-            string json =
-                JsonConvert.SerializeObject(
-                    args
-                );
+            if (properties.Length == 0)
+            {
+                throw new ArgumentException("Update requires at least one property to update.", nameof(args));
+            }
 
-            T item =
-                JsonConvert
-                    .DeserializeObject<T>(
-                        json
-                    )!;
 
-            primaryAttribute.SetValue(
-                item,
-                primaryKeyValue
-            );
+            /*
+             * ============================================================
+             * VALIDAR QUE TODAS LAS COLUMNAS PROVENGAN DEL MODELO
+             * ============================================================
+             */
 
-            var builder =
-                new QueryBuilder<T>();
+            Dictionary<string, PropertyInfo> modelProperties = typeof(T).GetProperties().ToDictionary(property => property.Name,  property => property, StringComparer.OrdinalIgnoreCase);
 
-            builder.UpdateDynamicQuery<T>(
-                args
-            );
+            foreach (PropertyInfo property in properties)
+            {
+                if (!modelProperties.TryGetValue(property.Name, out PropertyInfo? modelProperty))
+                {
+                    throw new QueryBuilderException(
+                        $"Property '{property.Name}' does not exist " +
+                        $"on model '{typeof(T).Name}'."
+                    );
+                }
 
-            PropertyInfo[] properties =
-                args.GetType()
-                    .GetProperties();
 
-            return (
-                builder,
-                item,
-                properties
-            );
+                if (string.Equals(modelProperty.Name,  primaryAttribute.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException(
+                        $"Primary key '{primaryAttribute.Name}' " +
+                        $"cannot be included in a partial update.",
+                        nameof(args)
+                    );
+                }
+
+
+                if (!Attribute.IsDefined(modelProperty,typeof(Fillable)))
+                {
+                    throw new QueryBuilderException(
+                        $"Property '{modelProperty.Name}' is not marked " +
+                        $"with [Fillable] on model '{typeof(T).Name}'."
+                    );
+                }
+            }
+
+
+            object? primaryKeyValue = primaryAttribute.GetValue(this, null);
+
+            var parameters = new DynamicParameters();
+
+            foreach (PropertyInfo property in properties)
+            {
+                parameters.Add(property.Name, property.GetValue(args,null));
+            }
+
+            parameters.Add(primaryAttribute.Name, primaryKeyValue);
+
+            var builder = new QueryBuilder<T>();
+
+            builder.UpdateDynamicQuery<T>(args);
+
+            return (builder, parameters, properties);
+        }
+
+        private static List<T> PrepareManyItems(IEnumerable<T> items, string methodName)
+        {
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            List<T> itemsList = items.ToList();
+
+            if (itemsList.Any(item => item == null))
+            {
+                throw new ArgumentException($"{methodName}<{typeof(T).Name}> cannot contain null items.", nameof(items));
+            }
+
+            return itemsList;
+        }
+
+        private static IReadOnlyList<T> PrepareBulkItems(IEnumerable<T> items, string methodName)
+        {
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            IReadOnlyList<T> itemsList = items as IReadOnlyList<T> ?? items.ToList();
+
+            if (itemsList.Any(item => item == null))
+            {
+                throw new ArgumentException($"{methodName}<{typeof(T).Name}> cannot contain null items.", nameof(items));
+            }
+
+            return itemsList;
+        }
+
+        private static void ExecuteCreateMany(List<T> items)
+        {
+            int chunkSize = QueryBuilder<T>.GetInsertManyChunkSize();
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+
+            _executor.ExecuteBatch(connectionKey, () =>
+            {
+                for (int offset = 0; offset < items.Count; offset += chunkSize)
+                {
+                    int count = Math.Min(chunkSize, items.Count - offset);
+                    List<T> chunk = items.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<T>.BuildInsertManyCommand(chunk, true);
+                    var builder = new QueryBuilder<T>();
+
+                    if (command.ReturnsGeneratedKeys)
+                    {
+                        List<BulkInsertKeyResult> generatedKeys = builder.QueryList<BulkInsertKeyResult>(command.Sql, command.Parameters);
+                        AssignBulkGeneratedPrimaryKeys(chunk, generatedKeys);
+                    }
+                    else
+                    {
+                        builder.ExecuteCommand(command.Sql, command.Parameters);
+                    }
+                }
+
+                return true;
+            });
+        }
+
+        private static async Task ExecuteCreateManyAsync(List<T> items, CancellationToken cancellationToken)
+        {
+            int chunkSize = QueryBuilder<T>.GetInsertManyChunkSize();
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+
+            await _executor.ExecuteBatchAsync(connectionKey, async () =>
+            {
+                for (int offset = 0; offset < items.Count; offset += chunkSize)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    int count = Math.Min(chunkSize, items.Count - offset);
+                    List<T> chunk = items.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<T>.BuildInsertManyCommand(chunk, true);
+                    var builder = new QueryBuilder<T>();
+
+                    if (command.ReturnsGeneratedKeys)
+                    {
+                        List<BulkInsertKeyResult> generatedKeys = await builder.QueryListAsync<BulkInsertKeyResult>(command.Sql, command.Parameters, cancellationToken).ConfigureAwait(false);
+                        AssignBulkGeneratedPrimaryKeys(chunk, generatedKeys);
+                    }
+                    else
+                    {
+                        await builder.ExecuteCommandAsync(command.Sql, command.Parameters, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static void ExecuteInsertMany(List<T> items)
+        {
+            int chunkSize = QueryBuilder<T>.GetInsertManyChunkSize();
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+
+            _executor.ExecuteBatch(connectionKey, () =>
+            {
+                var builder = new QueryBuilder<T>();
+
+                for (int offset = 0; offset < items.Count; offset += chunkSize)
+                {
+                    int count = Math.Min(chunkSize, items.Count - offset);
+                    List<T> chunk = items.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<T>.BuildInsertManyCommand(chunk, false);
+                    builder.ExecuteCommand(command.Sql, command.Parameters);
+                }
+
+                return true;
+            });
+        }
+
+        private static async Task ExecuteInsertManyAsync(List<T> items, CancellationToken cancellationToken)
+        {
+            int chunkSize = QueryBuilder<T>.GetInsertManyChunkSize();
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+
+            await _executor.ExecuteBatchAsync(connectionKey, async () =>
+            {
+                var builder = new QueryBuilder<T>();
+
+                for (int offset = 0; offset < items.Count; offset += chunkSize)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    int count = Math.Min(chunkSize, items.Count - offset);
+                    List<T> chunk = items.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<T>.BuildInsertManyCommand(chunk, false);
+                    await builder.ExecuteCommandAsync(command.Sql, command.Parameters, cancellationToken).ConfigureAwait(false);
+                }
+
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static void ExecuteBulkInsert(IReadOnlyList<T> items)
+        {
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+            string table = QueryBuilder<T>.GetTableName();
+            List<PropertyInfo> properties = GetBulkInsertProperties();
+
+            _executor.Execute(connectionKey, context =>
+            {
+                using var reader = new BulkInsertDataReader<T>(items, properties);
+                using var bulkCopy = new SqlBulkCopy(context.Connection, SqlBulkCopyOptions.KeepNulls | SqlBulkCopyOptions.CheckConstraints, context.Transaction);
+
+                bulkCopy.DestinationTableName = table;
+                bulkCopy.EnableStreaming = true;
+                bulkCopy.BatchSize = 5000;
+
+                foreach (PropertyInfo property in properties)
+                {
+                    bulkCopy.ColumnMappings.Add(property.Name, property.Name);
+                }
+
+                int? commandTimeout = new QueryBuilder<T>().GetCommandTimeout();
+
+                if (commandTimeout.HasValue)
+                {
+                    bulkCopy.BulkCopyTimeout = commandTimeout.Value;
+                }
+
+                bulkCopy.WriteToServer(reader);
+
+                return true;
+            });
+        }
+
+        private static async Task ExecuteBulkInsertAsync(IReadOnlyList<T> items, CancellationToken cancellationToken)
+        {
+            string connectionKey = QueryBuilder<T>.GetConnectionString();
+            string table = QueryBuilder<T>.GetTableName();
+            List<PropertyInfo> properties = GetBulkInsertProperties();
+
+            await _executor.ExecuteAsync(connectionKey, async context =>
+            {
+                using var reader = new BulkInsertDataReader<T>(items, properties);
+                using var bulkCopy = new SqlBulkCopy(context.Connection, SqlBulkCopyOptions.KeepNulls | SqlBulkCopyOptions.CheckConstraints, context.Transaction);
+
+                bulkCopy.DestinationTableName = table;
+                bulkCopy.EnableStreaming = true;
+                bulkCopy.BatchSize = 5000;
+
+                foreach (PropertyInfo property in properties)
+                {
+                    bulkCopy.ColumnMappings.Add(property.Name, property.Name);
+                }
+
+                int? commandTimeout = new QueryBuilder<T>().GetCommandTimeout();
+
+                if (commandTimeout.HasValue)
+                {
+                    bulkCopy.BulkCopyTimeout = commandTimeout.Value;
+                }
+
+                await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
+
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static List<PropertyInfo> GetBulkInsertProperties()
+        {
+            PropertyInfo? primaryKey = QueryBuilder<T>.GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(T).Name}'. Add the [PrimaryKey] attribute to the appropriate property.");
+            }
+
+            bool incrementing = QueryBuilder<T>.IsIncrementing();
+
+            List<PropertyInfo> properties = QueryBuilder<T>.GetInsertManyProperties(primaryKey, incrementing);
+
+            if (properties.Count == 0)
+            {
+                throw new ModelConfigurationException($"Model '{typeof(T).Name}' does not contain properties that can be bulk inserted.");
+            }
+
+            return properties;
+        }
+
+        private static void AssignBulkGeneratedPrimaryKeys(IReadOnlyList<T> items, IReadOnlyList<BulkInsertKeyResult> generatedKeys)
+        {
+            if (generatedKeys.Count != items.Count)
+            {
+                throw new ModelConfigurationException($"Bulk insert for model '{typeof(T).Name}' inserted {items.Count} records but returned {generatedKeys.Count} generated primary keys.");
+            }
+
+            var assignedIndexes = new bool[items.Count];
+
+            foreach (BulkInsertKeyResult generatedKey in generatedKeys)
+            {
+                if (generatedKey.Index < 0 || generatedKey.Index >= items.Count)
+                {
+                    throw new ModelConfigurationException($"Bulk insert for model '{typeof(T).Name}' returned an invalid row index '{generatedKey.Index}'.");
+                }
+
+                if (assignedIndexes[generatedKey.Index])
+                {
+                    throw new ModelConfigurationException($"Bulk insert for model '{typeof(T).Name}' returned the row index '{generatedKey.Index}' more than once.");
+                }
+
+                AssignGeneratedPrimaryKey(items[generatedKey.Index], generatedKey.Value);
+                assignedIndexes[generatedKey.Index] = true;
+            }
+
+            if (assignedIndexes.Any(assigned => !assigned))
+            {
+                throw new ModelConfigurationException($"Bulk insert for model '{typeof(T).Name}' did not return a generated primary key for every inserted record.");
+            }
+        }
+
+        private static void AssignDynamicPropertyValue(T item, PropertyInfo property, object? value)
+        {
+            if (!property.CanWrite)
+            {
+                throw new ModelConfigurationException($"Property '{property.Name}' on model '{typeof(T).Name}' is read-only.");
+            }
+
+            if (value == null)
+            {
+                if (property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) == null)
+                {
+                    throw new ModelConfigurationException($"Property '{property.Name}' on model '{typeof(T).Name}' cannot receive null because its type '{property.PropertyType.Name}' is not nullable.");
+                }
+
+                property.SetValue(item, null);
+
+                return;
+            }
+
+            Type destinationType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+            object convertedValue;
+
+            try
+            {
+                if (destinationType.IsInstanceOfType(value))
+                {
+                    convertedValue = value;
+                }
+                else if (destinationType == typeof(Guid))
+                {
+                    convertedValue = value is Guid guid ? guid : Guid.Parse(value.ToString()!);
+                }
+                else if (destinationType.IsEnum)
+                {
+                    convertedValue = value is string enumName ? Enum.Parse(destinationType, enumName, true) : Enum.ToObject(destinationType, value);
+                }
+                else
+                {
+                    convertedValue = Convert.ChangeType(value, destinationType, System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new ModelConfigurationException($"Unable to convert value '{value}' from type '{value.GetType().Name}' to '{property.PropertyType.Name}' for property '{property.Name}' on model '{typeof(T).Name}'.", ex);
+            }
+
+            property.SetValue(item, convertedValue);
         }
 
         private void ApplyDynamicUpdateValues(object args, IEnumerable<PropertyInfo> properties)

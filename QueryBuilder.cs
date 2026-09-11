@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using DapperGlib.Internal;
 using System.Threading;
 
 namespace DapperGlib
@@ -77,25 +78,26 @@ namespace DapperGlib
 
         internal QueryBuilder<TModel> InsertQuery<T>(T Item)
         {
-            List<PropertyInfo> properties =
-                GetFillableProperties();
+            List<PropertyInfo> properties = GetFillableProperties();
 
-            PropertyInfo? primaryKey =
-                GetPropertyInfoByAttribute(
-                    Item!,
-                    typeof(PrimaryKey)
-                );
+            PropertyInfo? primaryKey =  GetPropertyInfoByAttribute(Item!, typeof(PrimaryKey));
 
             if (primaryKey == null)
             {
                 throw new ModelConfigurationException(
                     $"Primary key is not defined for model " +
-                    $"'{typeof(T).Name}'. " +
+                    $"'{typeof(TModel).Name}'. " +
                     $"Add the [PrimaryKey] attribute to the appropriate property."
                 );
             }
 
             bool incrementing = IsIncrementing();
+
+            if (incrementing)
+            {
+                EnsureGeneratedPrimaryKeyWritable(primaryKey);
+            }
+
 
             var names = new List<string>();
 
@@ -177,33 +179,207 @@ namespace DapperGlib
             return this;
         }
 
-        public void Update(dynamic args)
+
+        internal QueryBuilder<TModel> InsertDynamicQuery(IEnumerable<string> propertyNames)
         {
+            List<string> names = propertyNames.ToList();
 
-            var json = JsonConvert.SerializeObject(args);
-            var item = (TModel)JsonConvert.DeserializeObject<TModel>(json);
-
-            var Properties = args.GetType().GetProperties();
-
-            object[] Values = new object[Properties.Length];
-            int index = 0;
-            foreach (var property in Properties)
+            if (names.Count == 0)
             {
-                var PropertyName = property.Name;
-                Values[index] = $"{PropertyName} = @{PropertyName}";
-                index++;
+                throw new QueryBuilderException("Create requires at least one property to insert.");
             }
+
+            PropertyInfo? primaryKey = GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(TModel).Name}'. Add the [PrimaryKey] attribute to the appropriate property.");
+            }
+
+            bool incrementing = IsIncrementing();
+
+            if (incrementing)
+            {
+                EnsureGeneratedPrimaryKeyWritable(primaryKey);
+            }
+
+            if (incrementing && names.Any(name => string.Equals(name, primaryKey.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new QueryBuilderException($"Primary key '{primaryKey.Name}' cannot be provided because model '{typeof(TModel).Name}' uses an incrementing primary key.");
+            }
+
+            if (!incrementing && !names.Any(name => string.Equals(name, primaryKey.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new QueryBuilderException($"Primary key '{primaryKey.Name}' must be provided because model '{typeof(TModel).Name}' does not use an incrementing primary key.");
+            }
+
+            List<string> values = names.Select(name => $"@{name}").ToList();
 
             string table = GetTableName();
 
-            var regex = new Regex(Regex.Escape("FROM"));
-            var match = regex.Match(Query.ToString());
+            if (incrementing)
+            {
+                Query = new StringBuilder($"DECLARE @__dglib_inserted TABLE ([Value] sql_variant); INSERT INTO {table} ({string.Join(",", names)}) OUTPUT INSERTED.{primaryKey.Name} INTO @__dglib_inserted ([Value]) VALUES ({string.Join(",", values)}); SELECT [Value] FROM @__dglib_inserted;");
+            }
+            else
+            {
+                Query = new StringBuilder($"INSERT INTO {table} ({string.Join(",", names)}) VALUES ({string.Join(",", values)})");
+            }
 
-            string replaced = string.Concat($"UPDATE {table} SET {String.Join(",", Values)} ", Query.ToString().AsSpan(match.Index));
+            return this;
+        }
 
-            Query = new(replaced);
 
-            ExecuteCommand(ToParameterizedSql(), item);
+        internal static int GetInsertManyChunkSize()
+        {
+            PropertyInfo? primaryKey = GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(TModel).Name}'. Add the [PrimaryKey] attribute to the appropriate property.");
+            }
+
+            bool incrementing = IsIncrementing();
+            List<PropertyInfo> properties = GetInsertManyProperties(primaryKey, incrementing);
+
+            if (properties.Count == 0)
+            {
+                throw new ModelConfigurationException($"Model '{typeof(TModel).Name}' does not contain properties that can be inserted.");
+            }
+
+            const int parameterBudget = 2000;
+
+            int rowsByParameters = parameterBudget / properties.Count;
+
+            if (rowsByParameters <= 0)
+            {
+                throw new ModelConfigurationException($"Model '{typeof(TModel).Name}' contains too many insertable properties for a SQL Server command.");
+            }
+
+            return Math.Min(1000, rowsByParameters);
+        }
+
+        internal static BulkInsertCommand BuildInsertManyCommand(IReadOnlyList<TModel> items, bool returnGeneratedKeys)
+        {
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            if (items.Count == 0)
+            {
+                throw new ArgumentException("Bulk insert requires at least one item.", nameof(items));
+            }
+
+            if (items.Any(item => item is null))
+            {
+                throw new ArgumentException($"Bulk insert for model '{typeof(TModel).Name}' cannot contain null items.", nameof(items));
+            }
+
+            PropertyInfo? primaryKey = GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(TModel).Name}'. Add the [PrimaryKey] attribute to the appropriate property.");
+            }
+
+            bool incrementing = IsIncrementing();
+            bool returnsGeneratedKeys = incrementing && returnGeneratedKeys;
+
+            if (returnsGeneratedKeys)
+            {
+                EnsureGeneratedPrimaryKeyWritable(primaryKey);
+            }
+
+            List<PropertyInfo> properties = GetInsertManyProperties(primaryKey, incrementing);
+
+            if (properties.Count == 0)
+            {
+                throw new ModelConfigurationException($"Model '{typeof(TModel).Name}' does not contain properties that can be inserted.");
+            }
+
+            const int parameterBudget = 2000;
+            int chunkSize = Math.Min(1000, parameterBudget / properties.Count);
+
+            if (items.Count > chunkSize)
+            {
+                throw new ArgumentException($"Bulk insert for model '{typeof(TModel).Name}' exceeds the maximum chunk size of {chunkSize} rows for {properties.Count} parameters per row.", nameof(items));
+            }
+
+            string table = GetTableName();
+            string[] columns = properties.Select(property => property.Name).ToArray();
+
+            var parameters = new DynamicParameters();
+            var rows = new List<string>(items.Count);
+
+            for (int rowIndex = 0; rowIndex < items.Count; rowIndex++)
+            {
+                TModel item = items[rowIndex];
+                var values = new List<string>(properties.Count + (incrementing ? 1 : 0));
+
+                foreach (PropertyInfo property in properties)
+                {
+                    string parameterName = $"__dglib_{rowIndex}_{property.Name}";
+
+                    parameters.Add(parameterName, property.GetValue(item));
+                    values.Add($"@{parameterName}");
+                }
+
+                if (returnsGeneratedKeys)
+                {
+                    values.Add(rowIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+
+                rows.Add($"({string.Join(",", values)})");
+            }
+
+            string sql;
+
+            if (returnsGeneratedKeys)
+            {
+                string sourceColumns = string.Join(",", columns.Concat(new[] { "__dglib_index" }));
+                string sourceValues = string.Join(",", columns.Select(column => $"source.{column}"));
+
+                sql =
+                    $"MERGE INTO {table} AS target " +
+                    $"USING (VALUES {string.Join(",", rows)}) AS source ({sourceColumns}) " +
+                    $"ON 1 = 0 " +
+                    $"WHEN NOT MATCHED THEN " +
+                    $"INSERT ({string.Join(",", columns)}) " +
+                    $"VALUES ({sourceValues}) " +
+                    $"OUTPUT source.__dglib_index AS [Index], INSERTED.{primaryKey.Name} AS [Value];";
+            }
+            else
+            {
+                sql =
+                    $"INSERT INTO {table} " +
+                    $"({string.Join(",", columns)}) " +
+                    $"VALUES {string.Join(",", rows)};";
+            }
+
+            return new BulkInsertCommand(sql, parameters, returnsGeneratedKeys, items.Count);
+
+        }
+
+        internal static List<PropertyInfo> GetInsertManyProperties(PropertyInfo primaryKey, bool incrementing)
+        {
+            List<PropertyInfo> properties = GetFillableProperties();
+
+            if (!incrementing && !properties.Any(property => string.Equals(property.Name, primaryKey.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                properties.Add(primaryKey);
+            }
+
+            return properties;
+        }
+
+        public void Update(dynamic args)
+        {
+            object parameters = (object)args;
+
+            BuildDynamicUpdateQuery(parameters);
+
+            ExecuteCommand(ToParameterizedSql(), parameters);
         }
 
         public Task<int> UpdateAsync(dynamic args)
@@ -218,51 +394,36 @@ namespace DapperGlib
 
         private async Task<int> UpdateAsyncCore(object args, CancellationToken cancellationToken)
         {
-            var json = JsonConvert.SerializeObject(args);
+            BuildDynamicUpdateQuery(args);
 
-            var item = (TModel)JsonConvert.DeserializeObject<TModel>(json)!;
+            return await ExecuteCommandAsync(ToParameterizedSql(), args, cancellationToken).ConfigureAwait(false);
+        }
 
-            var properties =
-                args.GetType().GetProperties();
-
-            object[] values =
-                new object[properties.Length];
-
-            int index = 0;
-
-            foreach (var property in properties)
+        private void BuildDynamicUpdateQuery(object args)
+        {
+            if (args == null)
             {
-                string propertyName =
-                    property.Name;
-
-                values[index] =
-                    $"{propertyName} = @{propertyName}";
-
-                index++;
+                throw new ArgumentNullException(nameof(args));
             }
 
-            string table =
-                GetTableName();
+            PropertyInfo[] properties = args.GetType().GetProperties();
 
-            var regex =
-                new Regex(
-                    Regex.Escape("FROM")
-                );
+            if (properties.Length == 0)
+            {
+                throw new QueryBuilderException("Update requires at least one property to update.");
+            }
 
-            var match =
-                regex.Match(
-                    Query.ToString()
-                );
+            string[] values = properties.Select(property => $"{property.Name} = @{property.Name}").ToArray();
 
-            string replaced =
-                string.Concat(
-                    $"UPDATE {table} SET {string.Join(",", values)} ",
-                    Query.ToString().AsSpan(match.Index)
-                );
+            string table = GetTableName();
+            string currentQuery = Query.ToString();
 
-            Query = new StringBuilder(replaced);
+            var regex = new Regex(Regex.Escape("FROM"));
+            var match = regex.Match(currentQuery);
 
-            return await ExecuteCommandAsync(ToParameterizedSql(), item, cancellationToken).ConfigureAwait(false);
+            string suffix = match.Success ? currentQuery.Substring(match.Index) : "";
+
+            Query = new StringBuilder($"UPDATE {table} SET {string.Join(",", values)} {suffix}");
         }
 
         internal QueryBuilder<TModel> UpdateQuery<T>(T Item)
@@ -2036,6 +2197,17 @@ namespace DapperGlib
             List<PropertyInfo> Properties = Instance.GetType().GetProperties().Where(prop => Attribute.IsDefined(prop, typeof(Fillable))).ToList();
 
             return Properties;
+        }
+
+        private static void EnsureGeneratedPrimaryKeyWritable(PropertyInfo primaryKey)
+        {
+            if (!primaryKey.CanWrite)
+            {
+                throw new ModelConfigurationException(
+                    $"Primary key property '{primaryKey.Name}' " +
+                    $"on model '{typeof(TModel).Name}' is read-only."
+                );
+            }
         }
 
         public QueryBuilder<TModel> Clone()

@@ -1,4 +1,5 @@
 ﻿using DapperGlib.Exceptions;
+using DapperGlib.Internal;
 using DapperGlib.Util;
 using Newtonsoft.Json.Linq;
 using System.Data.Common;

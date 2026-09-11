@@ -1,6 +1,7 @@
 ﻿using DapperGlib.Exceptions;
 using DapperGlib.Interfaces;
 using System.Reflection;
+using DapperGlib.Internal;
 using System.Threading;
 
 namespace DapperGlib
@@ -90,30 +91,44 @@ namespace DapperGlib
 
         public List<TRelationship> CreateMany(IEnumerable<TRelationship> items)
         {
-            var itemsList =
-                PrepareRelatedItems(
-                    items,
-                    nameof(CreateMany)
-                );
+            List<TRelationship> itemsList = PrepareRelatedItems(items, nameof(CreateMany));
 
             if (itemsList.Count == 0)
             {
                 return new List<TRelationship>();
             }
 
-            var result =
-                new List<TRelationship>(
-                    itemsList.Count
-                );
-
-            foreach (var item in itemsList)
+            foreach (TRelationship item in itemsList)
             {
-                result.Add(
-                    Create(item)
-                );
+                PrepareRelatedModel(item);
             }
 
-            return result;
+            int chunkSize = QueryBuilder<TRelationship>.GetInsertManyChunkSize();
+
+            return _executor.ExecuteBatch(GetConnectionString(), () =>
+            {
+                var builder = new QueryBuilder<TRelationship>();
+
+                for (int offset = 0; offset < itemsList.Count; offset += chunkSize)
+                {
+                    int count = Math.Min(chunkSize, itemsList.Count - offset);
+                    List<TRelationship> chunk = itemsList.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<TRelationship>.BuildInsertManyCommand(chunk, true);
+
+                    if (command.ReturnsGeneratedKeys)
+                    {
+                        List<BulkInsertKeyResult> generatedKeys = builder.QueryList<BulkInsertKeyResult>(command.Sql, command.Parameters);
+                        AssignGeneratedPrimaryKeys(chunk, generatedKeys);
+                    }
+                    else
+                    {
+                        builder.ExecuteCommand(command.Sql, command.Parameters);
+                    }
+                }
+
+                return itemsList;
+            });
         }
 
         public Task<List<TRelationship>> CreateManyAsync(IEnumerable<TRelationship> items)
@@ -124,42 +139,48 @@ namespace DapperGlib
             );
         }
 
-        public async Task<List<TRelationship>> CreateManyAsync(IEnumerable<TRelationship> items, CancellationToken cancellationToken)
+        public Task<List<TRelationship>> CreateManyAsync(IEnumerable<TRelationship> items, CancellationToken cancellationToken)
         {
-            var itemsList =
-                PrepareRelatedItems(
-                    items,
-                    nameof(CreateManyAsync)
-                );
+            List<TRelationship> itemsList = PrepareRelatedItems(items, nameof(CreateManyAsync));
 
             if (itemsList.Count == 0)
             {
-                return new List<TRelationship>();
+                return Task.FromResult(new List<TRelationship>());
             }
 
-            var result =
-                new List<TRelationship>(
-                    itemsList.Count
-                );
-
-            foreach (var item in itemsList)
+            foreach (TRelationship item in itemsList)
             {
-                cancellationToken
-                    .ThrowIfCancellationRequested();
-
-                TRelationship created =
-                    await CreateAsync(
-                        item,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-
-                result.Add(
-                    created
-                );
+                PrepareRelatedModel(item);
             }
 
-            return result;
+            int chunkSize = QueryBuilder<TRelationship>.GetInsertManyChunkSize();
+
+            return _executor.ExecuteBatchAsync(GetConnectionString(), async () =>
+            {
+                var builder = new QueryBuilder<TRelationship>();
+
+                for (int offset = 0; offset < itemsList.Count; offset += chunkSize)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    int count = Math.Min(chunkSize, itemsList.Count - offset);
+                    List<TRelationship> chunk = itemsList.GetRange(offset, count);
+
+                    BulkInsertCommand command = QueryBuilder<TRelationship>.BuildInsertManyCommand(chunk, true);
+
+                    if (command.ReturnsGeneratedKeys)
+                    {
+                        List<BulkInsertKeyResult> generatedKeys = await builder.QueryListAsync<BulkInsertKeyResult>(command.Sql, command.Parameters, cancellationToken).ConfigureAwait(false);
+                        AssignGeneratedPrimaryKeys(chunk, generatedKeys);
+                    }
+                    else
+                    {
+                        await builder.ExecuteCommandAsync(command.Sql, command.Parameters, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                return itemsList;
+            }, cancellationToken);
         }
 
         public new void Delete()
@@ -219,6 +240,72 @@ namespace DapperGlib
                         $"'{LocalValue}'. Make sure the parent model has been saved first."
                     );
                 }
+            }
+        }
+
+        private static void AssignGeneratedPrimaryKeys(IReadOnlyList<TRelationship> items, IReadOnlyList<BulkInsertKeyResult> generatedKeys)
+        {
+            if (generatedKeys.Count != items.Count)
+            {
+                throw new ModelConfigurationException($"Relationship bulk create for model '{typeof(TRelationship).Name}' inserted {items.Count} records but returned {generatedKeys.Count} generated primary keys.");
+            }
+
+            string? primaryKeyName = QueryBuilder<TRelationship>.GetPrimaryKey();
+
+            if (primaryKeyName == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(TRelationship).Name}'.");
+            }
+
+            PropertyInfo? primaryKey = typeof(TRelationship).GetProperty(primaryKeyName);
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key property '{primaryKeyName}' was not found on model '{typeof(TRelationship).Name}'.");
+            }
+
+            if (!primaryKey.CanWrite)
+            {
+                throw new ModelConfigurationException($"Primary key property '{primaryKey.Name}' on model '{typeof(TRelationship).Name}' is read-only.");
+            }
+
+            var assignedIndexes = new bool[items.Count];
+
+            foreach (BulkInsertKeyResult generatedKey in generatedKeys)
+            {
+                if (generatedKey.Index < 0 || generatedKey.Index >= items.Count)
+                {
+                    throw new ModelConfigurationException($"Relationship bulk create for model '{typeof(TRelationship).Name}' returned an invalid row index '{generatedKey.Index}'.");
+                }
+
+                if (assignedIndexes[generatedKey.Index])
+                {
+                    throw new ModelConfigurationException($"Relationship bulk create for model '{typeof(TRelationship).Name}' returned row index '{generatedKey.Index}' more than once.");
+                }
+
+                if (generatedKey.Value == null || generatedKey.Value == DBNull.Value)
+                {
+                    throw new ModelConfigurationException($"The database did not return a generated value for primary key '{primaryKey.Name}' on model '{typeof(TRelationship).Name}'.");
+                }
+
+                object? convertedValue;
+
+                try
+                {
+                    convertedValue = ConvertValue(generatedKey.Value, primaryKey.PropertyType);
+                }
+                catch (Exception ex)
+                {
+                    throw new ModelConfigurationException($"Unable to convert generated primary key value '{generatedKey.Value}' to '{primaryKey.PropertyType.Name}' for model '{typeof(TRelationship).Name}'.", ex);
+                }
+
+                primaryKey.SetValue(items[generatedKey.Index], convertedValue);
+                assignedIndexes[generatedKey.Index] = true;
+            }
+
+            if (assignedIndexes.Any(assigned => !assigned))
+            {
+                throw new ModelConfigurationException($"Relationship bulk create for model '{typeof(TRelationship).Name}' did not return a generated primary key for every inserted record.");
             }
         }
 
