@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using DapperGlib.Relationships;
 
 namespace DapperGlib
 {
@@ -19,8 +20,11 @@ namespace DapperGlib
 
         internal StringBuilder Query { get; set; } = new StringBuilder();
         internal List<object> SubQueries { get; set; } = new();
-        internal List<string> CountsRelationship { get; set; } = new();
+        internal List<string> RelationshipProjections { get; set; } = new();
+
         internal QueryParameterContext ParameterContext { get; set; } = new();
+
+        internal EagerLoadPlan EagerLoads { get; set; } = new();
 
         internal List<string> OrderList { get; set; } = new();
         internal string[] SelectList { get; set; } = Array.Empty<string>();
@@ -99,10 +103,10 @@ namespace DapperGlib
             }
 
             int j = 1;
-            foreach (string countQuery in CountsRelationship)
+            foreach (string projection in RelationshipProjections)
             {
-                string index = $"count_relationship_{j}";
-                string replace = ReplaceSelectorAggregate == null ? countQuery : "";
+                string index = $"relationship_projection_{j}";
+                string replace = ReplaceSelectorAggregate == null ? projection : "";
                 QueryCopy = QueryCopy.Replace(index, replace);
                 j++;
             }
@@ -242,94 +246,71 @@ namespace DapperGlib
 
         internal void WhereHasBuilder<TRelationship>(Clauses Clause, LogicalOperators Operator, string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null, string? ComparisonOperator = null, int? Value = null)
         {
-            if (CanAddCondition())
+            if (!CanAddCondition())
             {
-
-                var ReturnInstance = Activator.CreateInstance(typeof(TRelationship))!;
-
-                var property = Instance.GetType().GetProperty(Relationship);
-
-                if (property == null)
-                {
-                    throw new RelationshipException(
-                        $"Relationship '{Relationship}' was not found " +
-                        $"on model '{Instance.GetType().Name}'."
-                    );
-                }
-
-                if (property.PropertyType != typeof(Relationship<TRelationship>))
-                {
-                    throw new RelationshipException(
-                        $"Relationship '{Relationship}' on model " +
-                        $"'{Instance.GetType().Name}' must be of type " +
-                        $"'Relationship<{typeof(TRelationship).Name}>'."
-                    );
-                }
-
-                var propertyValue = property.GetValue(Instance);
-
-                if (propertyValue == null)
-                {
-                    throw new RelationshipException(
-                        $"Relationship '{Relationship}' on model " +
-                        $"'{Instance.GetType().Name}' is not initialized."
-                    );
-                }
-
-                Relationship<TRelationship> relationship = (Relationship<TRelationship>)propertyValue;
-
-                AddWhereClause();
-
-                if (ConditionsAdded != 0)
-                {
-                    Query.Append($" {Operator} ");
-                }
-
-                AddParenthesisGroupRelationship();
-
-                string Table = GetTableName(ReturnInstance);
-                string OwnTable = GetTableName();
-
-                SubQuery<TRelationship> SubQueryRelationship = new($" SELECT _selector_all FROM {Table} WHERE {Table}.{relationship.ForeignKey} = {OwnTable}.{relationship.LocalKey} ", Clause, ParameterContext);
-
-                if (ComparisonOperator != null && Value != null)
-                {
-                    SubQueryRelationship.Query = new StringBuilder(SubQueryRelationship.Query.ToString().Replace("_selector_all", "_selector_count"));
-
-                    SubQueryRelationship.AsCondition = true;
-                    SubQueryRelationship.ConditionOperator = ComparisonOperator;
-                    SubQueryRelationship.ConditionValue = Value;
-                    SubQueryRelationship.ConditionParameter = AddParameter(Value);
-                }
-
-                SubQueries.Add(SubQueryRelationship);
-
-                Query.Append($" SubQuery_{SubQueries.Count} ");
-
-                if (Builder != null)
-                {
-
-                    var SBuilder = Builder.Invoke(new("", Clause, ParameterContext));
-
-                    var parts = SBuilder.GetQuery().Split("WHERE");
-
-                    if (parts.Length == 2)
-                    {
-                        string ExtraCondition = $"{LogicalOperators.AND} {parts[1]}";
-
-                        foreach (var item in SBuilder.SubQueries)
-                        {
-                            SubQueryRelationship.SubQueries.Add(item);
-                        }
-
-                        SubQueryRelationship.Query.Append($" {ExtraCondition} ");
-                    }
-
-                }
-
-                ConditionsAdded += 1;
+                return;
             }
 
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), Relationship);
+
+            if (definition.RelatedType != typeof(TRelationship))
+            {
+                throw new RelationshipException($"Relationship '{Relationship}' on model '{typeof(TModel).Name}' points to model '{definition.RelatedType.Name}', but WhereHas was requested with model '{typeof(TRelationship).Name}'.");
+            }
+
+            string ownConnection = GetConnectionString();
+            string relatedConnection = QueryBuilder<TRelationship>.GetConnectionString();
+
+            if (!string.Equals(ownConnection, relatedConnection, StringComparison.Ordinal))
+            {
+                throw new RelationshipException($"Relationship '{Relationship}' between '{typeof(TModel).Name}' and '{typeof(TRelationship).Name}' cannot be queried because they use different connection keys. Parent connection: '{ownConnection}'. Related connection: '{relatedConnection}'. Cross-connection relationships are not supported.");
+            }
+
+            AddWhereClause();
+
+            if (ConditionsAdded != 0)
+            {
+                Query.Append($" {Operator} ");
+            }
+
+            AddParenthesisGroupRelationship();
+
+            string table = QueryBuilder<TRelationship>.GetTableName();
+            string ownTable = GetTableName();
+            string selector = ComparisonOperator != null && Value != null ? "_selector_count" : "1";
+
+            SubQuery<TRelationship> subQueryRelationship = new($" SELECT {selector} FROM {table} WHERE {table}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey} ", Clause, ParameterContext);
+
+            if (ComparisonOperator != null && Value != null)
+            {
+                subQueryRelationship.AsCondition = true;
+                subQueryRelationship.ConditionOperator = ComparisonOperator;
+                subQueryRelationship.ConditionValue = Value;
+                subQueryRelationship.ConditionParameter = AddParameter(Value);
+            }
+
+            SubQueries.Add(subQueryRelationship);
+            Query.Append($" SubQuery_{SubQueries.Count} ");
+
+            if (Builder != null)
+            {
+                SubQuery<TRelationship> constraintBuilder = Builder.Invoke(new SubQuery<TRelationship>("", Clause, ParameterContext));
+                string[] parts = constraintBuilder.GetQuery().Split("WHERE");
+
+                if (parts.Length == 2)
+                {
+                    string extraCondition = $"{LogicalOperators.AND} {parts[1]}";
+
+                    foreach (var item in constraintBuilder.SubQueries)
+                    {
+                        subQueryRelationship.SubQueries.Add(item);
+                    }
+
+                    subQueryRelationship.Query.Append($" {extraCondition} ");
+                }
+            }
+
+            ConditionsAdded += 1;
         }
 
         internal void InitWhen(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)

@@ -25,7 +25,7 @@
 
     <Authors>JDMF19</Authors>
 
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
 
     <Description>
       An easy way to interact with the database using Dapper inspired by Laravel Eloquent
@@ -35,7 +35,32 @@
 
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <PackageReleaseNotes>DapperGlib 1.5.0 adds CreateMany, InsertMany and BulkInsert APIs, improved async and CancellationToken support, safer transactions and connection handling, better SQL Server parameter chunking, stronger dynamic Create/Update validation, and multiple performance, security and reliability improvements.</PackageReleaseNotes>
+    <PackageReleaseNotes>## DapperGlib 1.6.0
+
+DapperGlib 1.6.0 introduces a new metadata-based relationship system, eager loading, relationship aggregates, strongly typed query expressions, and additional relationship-loading APIs.
+
+### Relationships
+
+- Added attribute-based relationship definitions:
+  - `[HasMany]`
+  - `[HasOne]`
+  - `[BelongsTo]`
+- Relationship keys can omit the related key when both sides use the same property name.
+- Added cached relationship metadata and model configuration validation.
+- Added strongly typed relationship expressions using lambda expressions.
+- Legacy `Relationship&lt;T&gt;` APIs remain available for existing code, while the new 1.6 relationship features use metadata-based navigation properties.
+
+Example:
+
+```csharp
+[HasMany(nameof(UserId), Chaperone = true)]
+public List&lt;Post&gt; Posts { get; set; } = new();
+
+[HasOne(nameof(UserId))]
+public UserProfile? Profile { get; set; }
+
+[BelongsTo(nameof(UserId))]
+public User? User { get; set; }</PackageReleaseNotes>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 

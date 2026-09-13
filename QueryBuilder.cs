@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DapperGlib.Internal;
 using System.Threading;
+using DapperGlib.Relationships;
+using System.Linq.Expressions;
 
 namespace DapperGlib
 {
@@ -34,11 +36,8 @@ namespace DapperGlib
                     deserializeSettings
                 ) ?? new();
 
-            CountsRelationship =
-                JsonConvert.DeserializeObject<List<string>>(
-                    JsonConvert.SerializeObject(Clone.CountsRelationship),
-                    deserializeSettings
-                ) ?? new();
+
+            RelationshipProjections = new List<string>(Clone.RelationshipProjections);
 
             OrderList =
                 JsonConvert.DeserializeObject<List<string>>(
@@ -59,6 +58,9 @@ namespace DapperGlib
             QueryCommandTimeout = Clone.QueryCommandTimeout;
 
             ParameterContext = Clone.ParameterContext.Clone();
+
+            EagerLoads = Clone.EagerLoads.Clone();
+
         }
 
         public QueryBuilder(string query)
@@ -80,7 +82,7 @@ namespace DapperGlib
         {
             List<PropertyInfo> properties = GetFillableProperties();
 
-            PropertyInfo? primaryKey =  GetPropertyInfoByAttribute(Item!, typeof(PrimaryKey));
+            PropertyInfo? primaryKey = GetPropertyInfoByAttribute(Item!, typeof(PrimaryKey));
 
             if (primaryKey == null)
             {
@@ -654,30 +656,189 @@ namespace DapperGlib
 
         #endregion
 
+
+        public QueryBuilder<TModel> With(string relationship)
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            EagerLoads.Add(typeof(TModel), relationship);
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> With(params string[] relationships)
+        {
+            if (relationships == null)
+            {
+                throw new ArgumentNullException(nameof(relationships));
+            }
+
+            if (relationships.Length == 0)
+            {
+                throw new ArgumentException("With requires at least one relationship.", nameof(relationships));
+            }
+
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            foreach (string relationship in relationships)
+            {
+                EagerLoads.Add(typeof(TModel), relationship);
+            }
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> With<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind != RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as '{definition.Kind}' and cannot be used as a collection eager-loading relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but With was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            return With(property.Name);
+        }
+
+        public QueryBuilder<TModel> With<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind != RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as '{definition.Kind}' and cannot be used as a collection eager-loading relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but With was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            EagerLoads.Add(typeof(TModel), property.Name, constraint);
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> With<TRelated>(Expression<Func<TModel, TRelated?>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind == RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as 'HasMany' and must be used as a collection eager-loading relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but With was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            return With(property.Name);
+        }
+
+        public QueryBuilder<TModel> With<TRelated>(Expression<Func<TModel, TRelated?>> relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind == RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as 'HasMany' and must be used as a collection eager-loading relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but With was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            EagerLoads.Add(typeof(TModel), property.Name, constraint);
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> With(params Expression<Func<TModel, object?>>[] relationships)
+        {
+            if (relationships == null)
+            {
+                throw new ArgumentNullException(nameof(relationships));
+            }
+
+            if (relationships.Length == 0)
+            {
+                throw new ArgumentException("With requires at least one relationship.", nameof(relationships));
+            }
+
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            foreach (Expression<Func<TModel, object?>> relationship in relationships)
+            {
+                PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+                EagerLoads.Add(typeof(TModel), property.Name);
+            }
+
+            return this;
+        }
+
+        public QueryBuilder<TModel> With<TRelated>(string relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            if (!CheckQueryInit())
+            {
+                SimpleQuery();
+            }
+
+            EagerLoads.Add(typeof(TModel), relationship, constraint);
+
+            return this;
+        }
+
+
         #region Retrieving
 
         public TModel First()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QueryFirst<TModel>(
-                ToParameterizedSql()
-            );
+            TModel item = QueryFirst<TModel>(ToParameterizedSql());
+
+            EagerLoader.Load(new[] { item }, EagerLoads, QueryCommandTimeout);
+
+            return item;
         }
 
-        public T First<T>()
+        public TResult First<TResult>()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(First));
 
-            return QueryFirst<T>(
-                ToParameterizedSql()
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QueryFirst<TResult>(ToParameterizedSql());
         }
 
         public Task<TModel> FirstAsync()
@@ -687,17 +848,15 @@ namespace DapperGlib
             );
         }
 
-        public Task<TModel> FirstAsync(CancellationToken cancellationToken)
+        public async Task<TModel> FirstAsync(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QueryFirstAsync<TModel>(
-                ToParameterizedSql(),
-                cancellationToken: cancellationToken
-            );
+            TModel item = await QueryFirstAsync<TModel>(ToParameterizedSql(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            await EagerLoader.LoadAsync(new[] { item }, EagerLoads, QueryCommandTimeout, cancellationToken).ConfigureAwait(false);
+
+            return item;
         }
 
         public Task<TResult> FirstAsync<TResult>()
@@ -709,40 +868,34 @@ namespace DapperGlib
 
         public Task<TResult> FirstAsync<TResult>(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(FirstAsync));
 
-            return QueryFirstAsync<TResult>(
-                ToParameterizedSql(),
-                cancellationToken: cancellationToken
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QueryFirstAsync<TResult>(ToParameterizedSql(), cancellationToken: cancellationToken);
         }
 
 
         public TModel? FirstOrDefault()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QueryFirstOrDefault<TModel>(
-                ToParameterizedSql()
-            );
+            TModel? item = QueryFirstOrDefault<TModel>(ToParameterizedSql());
+
+            if (item == null) return item;
+
+            EagerLoader.Load(new[] { item }, EagerLoads, QueryCommandTimeout);
+
+            return item;
         }
 
-        public T? FirstOrDefault<T>()
+        public TResult? FirstOrDefault<TResult>()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(FirstOrDefault));
 
-            return QueryFirstOrDefault<T>(
-                ToParameterizedSql()
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QueryFirstOrDefault<TResult>(ToParameterizedSql());
         }
 
         public Task<TModel?> FirstOrDefaultAsync()
@@ -752,18 +905,17 @@ namespace DapperGlib
             );
         }
 
-        public Task<TModel?> FirstOrDefaultAsync(CancellationToken cancellationToken)
+        public async Task<TModel?> FirstOrDefaultAsync(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QueryFirstOrDefaultAsync<TModel>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            TModel? item = await QueryFirstOrDefaultAsync<TModel>(ToParameterizedSql(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (item == null) return item;
+
+            await EagerLoader.LoadAsync(new[] { item }, EagerLoads, QueryCommandTimeout, cancellationToken).ConfigureAwait(false);
+
+            return item;
         }
 
         public Task<TResult?> FirstOrDefaultAsync<TResult>()
@@ -775,16 +927,11 @@ namespace DapperGlib
 
         public Task<TResult?> FirstOrDefaultAsync<TResult>(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(FirstOrDefaultAsync));
 
-            return QueryFirstOrDefaultAsync<TResult>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QueryFirstOrDefaultAsync<TResult>(ToParameterizedSql(), cancellationToken: cancellationToken);
         }
 
 
@@ -796,27 +943,23 @@ namespace DapperGlib
 
         public TModel Single()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QuerySingle<TModel>(
-                ToParameterizedSql()
-            );
+            TModel item = QuerySingle<TModel>(ToParameterizedSql());
+
+            EagerLoader.Load(new[] { item }, EagerLoads, QueryCommandTimeout);
+
+            return item;
         }
 
 
         public TResult Single<TResult>()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(Single));
 
-            return QuerySingle<TResult>(
-                ToParameterizedSql()
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QuerySingle<TResult>(ToParameterizedSql());
         }
 
 
@@ -828,19 +971,15 @@ namespace DapperGlib
         }
 
 
-        public Task<TModel> SingleAsync(
-            CancellationToken cancellationToken)
+        public async Task<TModel> SingleAsync(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QuerySingleAsync<TModel>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            TModel item = await QuerySingleAsync<TModel>(ToParameterizedSql(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            await EagerLoader.LoadAsync(new[] { item }, EagerLoads, QueryCommandTimeout, cancellationToken).ConfigureAwait(false);
+
+            return item;
         }
 
 
@@ -852,19 +991,13 @@ namespace DapperGlib
         }
 
 
-        public Task<TResult> SingleAsync<TResult>(
-            CancellationToken cancellationToken)
+        public Task<TResult> SingleAsync<TResult>(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(SingleAsync));
 
-            return QuerySingleAsync<TResult>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QuerySingleAsync<TResult>(ToParameterizedSql(), cancellationToken: cancellationToken);
         }
 
         /*
@@ -875,27 +1008,25 @@ namespace DapperGlib
 
         public TModel? SingleOrDefault()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QuerySingleOrDefault<TModel>(
-                ToParameterizedSql()
-            );
+            TModel? item = QuerySingleOrDefault<TModel>(ToParameterizedSql());
+
+            if (item == null) return item;
+
+            EagerLoader.Load(new[] { item }, EagerLoads, QueryCommandTimeout);
+
+            return item;
         }
 
 
         public TResult? SingleOrDefault<TResult>()
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            EnsureNoEagerLoadsForProjection(nameof(SingleOrDefault));
 
-            return QuerySingleOrDefault<TResult>(
-                ToParameterizedSql()
-            );
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QuerySingleOrDefault<TResult>(ToParameterizedSql());
         }
 
 
@@ -907,19 +1038,17 @@ namespace DapperGlib
         }
 
 
-        public Task<TModel?> SingleOrDefaultAsync(
-            CancellationToken cancellationToken)
+        public async Task<TModel?> SingleOrDefaultAsync(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
-            {
-                SimpleQuery();
-            }
+            if (!CheckQueryInit()) SimpleQuery();
 
-            return QuerySingleOrDefaultAsync<TModel>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            TModel? item = await QuerySingleOrDefaultAsync<TModel>(ToParameterizedSql(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (item == null) return item;
+
+            await EagerLoader.LoadAsync(new[] { item }, EagerLoads, QueryCommandTimeout, cancellationToken).ConfigureAwait(false);
+
+            return item;
         }
 
 
@@ -931,34 +1060,85 @@ namespace DapperGlib
         }
 
 
-        public Task<TResult?> SingleOrDefaultAsync<TResult>(
-            CancellationToken cancellationToken)
+        public Task<TResult?> SingleOrDefaultAsync<TResult>(CancellationToken cancellationToken)
         {
-            if (!CheckQueryInit())
+            EnsureNoEagerLoadsForProjection(nameof(SingleOrDefaultAsync));
+
+            if (!CheckQueryInit()) SimpleQuery();
+
+            return QuerySingleOrDefaultAsync<TResult>(ToParameterizedSql(), cancellationToken: cancellationToken);
+        }
+
+
+        public TModel Find<TKey>(TKey id)
+        {
+            TModel? item = FindOrDefault(id);
+
+            if (item == null)
             {
-                SimpleQuery();
+                throw new ModelNotFoundException(typeof(TModel), id!);
             }
 
-            return QuerySingleOrDefaultAsync<TResult>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            return item;
+        }
+
+        public TModel? FindOrDefault<TKey>(TKey id)
+        {
+            string primaryKey = GetRequiredPrimaryKeyNameForFind();
+            QueryBuilder<TModel> builder = Clone();
+
+            builder.Where(primaryKey, id);
+
+            return builder.FirstOrDefault();
+        }
+
+        public Task<TModel> FindAsync<TKey>(TKey id)
+        {
+            return FindAsync(id, CancellationToken.None);
+        }
+
+        public async Task<TModel> FindAsync<TKey>(TKey id, CancellationToken cancellationToken)
+        {
+            TModel? item = await FindOrDefaultAsync(id, cancellationToken).ConfigureAwait(false);
+
+            if (item == null)
+            {
+                throw new ModelNotFoundException(typeof(TModel), id!);
+            }
+
+            return item;
+        }
+
+        public Task<TModel?> FindOrDefaultAsync<TKey>(TKey id)
+        {
+            return FindOrDefaultAsync(id, CancellationToken.None);
+        }
+
+        public async Task<TModel?> FindOrDefaultAsync<TKey>(TKey id, CancellationToken cancellationToken)
+        {
+            string primaryKey = GetRequiredPrimaryKeyNameForFind();
+            QueryBuilder<TModel> builder = Clone();
+
+            builder.Where(primaryKey, id);
+
+            return await builder.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         }
 
 
         public List<TModel> ToList()
         {
-            return QueryList<TModel>(
-                ToParameterizedSql()
-            );
+            List<TModel> items = QueryList<TModel>(ToParameterizedSql());
+
+            EagerLoader.Load(items, EagerLoads, QueryCommandTimeout);
+
+            return items;
         }
 
         public List<TResult> ToList<TResult>()
         {
-            return QueryList<TResult>(
-                ToParameterizedSql()
-            );
+            EnsureNoEagerLoadsForProjection(nameof(ToList));
+
+            return QueryList<TResult>(ToParameterizedSql());
         }
 
         public Task<List<TModel>> ToListAsync()
@@ -968,13 +1148,13 @@ namespace DapperGlib
             );
         }
 
-        public Task<List<TModel>> ToListAsync(CancellationToken cancellationToken)
+        public async Task<List<TModel>> ToListAsync(CancellationToken cancellationToken)
         {
-            return QueryListAsync<TModel>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            List<TModel> items = await QueryListAsync<TModel>(ToParameterizedSql(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            await EagerLoader.LoadAsync(items, EagerLoads, QueryCommandTimeout, cancellationToken).ConfigureAwait(false);
+
+            return items;
         }
 
         public Task<List<TResult>> ToListAsync<TResult>()
@@ -986,15 +1166,15 @@ namespace DapperGlib
 
         public Task<List<TResult>> ToListAsync<TResult>(CancellationToken cancellationToken)
         {
-            return QueryListAsync<TResult>(
-                ToParameterizedSql(),
-                cancellationToken:
-                    cancellationToken
-            );
+            EnsureNoEagerLoadsForProjection(nameof(ToListAsync));
+
+            return QueryListAsync<TResult>(ToParameterizedSql(), cancellationToken: cancellationToken);
         }
 
         public bool Exists()
         {
+            EnsureNoEagerLoadsForProjection(nameof(Exists));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1021,6 +1201,8 @@ namespace DapperGlib
 
         public async Task<bool> ExistsAsync(CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(ExistsAsync));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1043,6 +1225,8 @@ namespace DapperGlib
 
         public bool DoesntExist()
         {
+            EnsureNoEagerLoadsForProjection(nameof(DoesntExist));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1070,6 +1254,8 @@ namespace DapperGlib
 
         public async Task<bool> DoesntExistAsync(CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(DoesntExistAsync));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1093,6 +1279,8 @@ namespace DapperGlib
 
         public int Count()
         {
+            EnsureNoEagerLoadsForProjection(nameof(Count));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1114,6 +1302,8 @@ namespace DapperGlib
 
         public Task<int> CountAsync(CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(CountAsync));
+
             if (!CheckQueryInit())
             {
                 SimpleQuery();
@@ -1130,6 +1320,8 @@ namespace DapperGlib
 
         public string Value(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Value));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1150,6 +1342,8 @@ namespace DapperGlib
 
         public TValue Value<TValue>(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Value));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1168,8 +1362,7 @@ namespace DapperGlib
             );
         }
 
-        public Task<string> ValueAsync(
-    string Column)
+        public Task<string> ValueAsync(string Column)
         {
             return ValueAsync(
                 Column,
@@ -1177,10 +1370,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<string> ValueAsync(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<string> ValueAsync(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(ValueAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1201,8 +1394,7 @@ namespace DapperGlib
             );
         }
 
-        public Task<TValue> ValueAsync<TValue>(
-            string Column)
+        public Task<TValue> ValueAsync<TValue>(string Column)
         {
             return ValueAsync<TValue>(
                 Column,
@@ -1210,10 +1402,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<TValue> ValueAsync<TValue>(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<TValue> ValueAsync<TValue>(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(ValueAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1236,6 +1428,8 @@ namespace DapperGlib
 
         public List<TValue> Pluck<TValue>(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Pluck));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1262,10 +1456,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<List<TValue>> PluckAsync<TValue>(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<List<TValue>> PluckAsync<TValue>(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(PluckAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1289,6 +1483,8 @@ namespace DapperGlib
 
         public double Max(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Max));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1309,6 +1505,8 @@ namespace DapperGlib
 
         public double Min(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Min));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1329,6 +1527,8 @@ namespace DapperGlib
 
         public double Avg(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Avg));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1349,6 +1549,8 @@ namespace DapperGlib
 
         public double Sum(string Column)
         {
+            EnsureNoEagerLoadsForProjection(nameof(Sum));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1367,8 +1569,7 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> MaxAsync(
-    string Column)
+        public Task<double> MaxAsync(string Column)
         {
             return MaxAsync(
                 Column,
@@ -1376,10 +1577,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> MaxAsync(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<double> MaxAsync(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(MaxAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1400,8 +1601,7 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> MinAsync(
-            string Column)
+        public Task<double> MinAsync(string Column)
         {
             return MinAsync(
                 Column,
@@ -1409,10 +1609,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> MinAsync(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<double> MinAsync(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(MinAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1442,10 +1642,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> AvgAsync(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<double> AvgAsync(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(AvgAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1466,8 +1666,7 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> SumAsync(
-            string Column)
+        public Task<double> SumAsync(string Column)
         {
             return SumAsync(
                 Column,
@@ -1475,10 +1674,10 @@ namespace DapperGlib
             );
         }
 
-        public Task<double> SumAsync(
-            string Column,
-            CancellationToken cancellationToken)
+        public Task<double> SumAsync(string Column, CancellationToken cancellationToken)
         {
+            EnsureNoEagerLoadsForProjection(nameof(SumAsync));
+
             Column =
                 ValidateColumn(
                     Column,
@@ -1585,6 +1784,17 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> Where<TValue>(Expression<Func<TModel, TValue>> column, TValue value)
+        {
+            return Where(ModelPropertyExpression.GetName(column, nameof(Where)), value);
+        }
+
+        public QueryBuilder<TModel> Where<TValue>(Expression<Func<TModel, TValue>> column, string comparisonOperator, TValue value)
+        {
+            return Where(ModelPropertyExpression.GetName(column, nameof(Where)), comparisonOperator, value);
+        }
+
+
         public QueryBuilder<TModel> WhereLike(string Column, string Pattern)
         {
             if (string.IsNullOrWhiteSpace(Column))
@@ -1608,6 +1818,11 @@ namespace DapperGlib
             );
 
             return this;
+        }
+
+        public QueryBuilder<TModel> WhereLike(Expression<Func<TModel, string?>> column, string pattern)
+        {
+            return WhereLike(ModelPropertyExpression.GetName(column, nameof(WhereLike)), pattern);
         }
 
         public QueryBuilder<TModel> WhereContains(string Column, string Value)
@@ -1635,6 +1850,12 @@ namespace DapperGlib
             );
         }
 
+        public QueryBuilder<TModel> WhereContains(Expression<Func<TModel, string?>> column, string value)
+        {
+            return WhereContains(ModelPropertyExpression.GetName(column, nameof(WhereContains)), value);
+        }
+
+
         public QueryBuilder<TModel> OrWhere(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
         {
             GroupCondition(Builder, LogicalOperators.OR);
@@ -1652,6 +1873,17 @@ namespace DapperGlib
             InitWhere(Column, Value, ComparisonOperator, LogicalOperators.OR);
             return this;
         }
+
+        public QueryBuilder<TModel> OrWhere<TValue>(Expression<Func<TModel, TValue>> column, TValue value)
+        {
+            return OrWhere(ModelPropertyExpression.GetName(column, nameof(OrWhere)), value);
+        }
+
+        public QueryBuilder<TModel> OrWhere<TValue>(Expression<Func<TModel, TValue>> column, string comparisonOperator, TValue value)
+        {
+            return OrWhere(ModelPropertyExpression.GetName(column, nameof(OrWhere)), comparisonOperator, value);
+        }
+
 
         public QueryBuilder<TModel> WhereNot(Func<SubQuery<TModel>, SubQuery<TModel>> Builder)
         {
@@ -1687,6 +1919,11 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereIn<TValue>(Expression<Func<TModel, TValue>> column, IEnumerable<TValue> values)
+        {
+            return WhereIn(ModelPropertyExpression.GetName(column, nameof(WhereIn)), values);
+        }
+
         public QueryBuilder<TModel> WhereNotIn(string Column, object[] Values)
         {
             return WhereNotIn<object>(
@@ -1708,6 +1945,11 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereNotIn<TValue>(Expression<Func<TModel, TValue>> column, IEnumerable<TValue> values)
+        {
+            return WhereNotIn(ModelPropertyExpression.GetName(column, nameof(WhereNotIn)), values);
+        }
+
         public QueryBuilder<TModel> WhereNull(string Column)
         {
             InitWhere(Column, null);
@@ -1720,10 +1962,25 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereNull<TValue>(Expression<Func<TModel, TValue>> column)
+        {
+            return WhereNull(ModelPropertyExpression.GetName(column, nameof(WhereNull)));
+        }
+
+        public QueryBuilder<TModel> WhereNotNull<TValue>(Expression<Func<TModel, TValue>> column)
+        {
+            return WhereNotNull(ModelPropertyExpression.GetName(column, nameof(WhereNotNull)));
+        }
+
         public QueryBuilder<TModel> WhereDate(string Column, string Date)
         {
             InitWhere(Column, Date, null, LogicalOperators.DATE);
             return this;
+        }
+
+        public QueryBuilder<TModel> WhereDate<TValue>(Expression<Func<TModel, TValue>> column, string date)
+        {
+            return WhereDate(ModelPropertyExpression.GetName(column, nameof(WhereDate)), date);
         }
 
         public QueryBuilder<TModel> WhereYear(string Column, string Year)
@@ -1732,10 +1989,20 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereYear<TValue>(Expression<Func<TModel, TValue>> column, string year)
+        {
+            return WhereYear(ModelPropertyExpression.GetName(column, nameof(WhereYear)), year);
+        }
+
         public QueryBuilder<TModel> WhereMonth(string Column, string Month)
         {
             InitWhere(Column, Month, null, LogicalOperators.WHEREMONTH);
             return this;
+        }
+
+        public QueryBuilder<TModel> WhereMonth<TValue>(Expression<Func<TModel, TValue>> column, string month)
+        {
+            return WhereMonth(ModelPropertyExpression.GetName(column, nameof(WhereMonth)), month);
         }
 
         public QueryBuilder<TModel> WhereDay(string Column, string Day)
@@ -1744,10 +2011,21 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereDay<TValue>(Expression<Func<TModel, TValue>> column, string day)
+        {
+            return WhereDay(ModelPropertyExpression.GetName(column, nameof(WhereDay)), day);
+        }
+
+
         public QueryBuilder<TModel> OrWhereYear(string Column, string Year)
         {
             InitWhere(Column, Year, null, LogicalOperators.ORWHEREYEAR);
             return this;
+        }
+
+        public QueryBuilder<TModel> OrWhereYear<TValue>(Expression<Func<TModel, TValue>> column, string year)
+        {
+            return OrWhereYear(ModelPropertyExpression.GetName(column, nameof(OrWhereYear)), year);
         }
 
         public QueryBuilder<TModel> OrWhereMonth(string Column, string Month)
@@ -1756,11 +2034,22 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> OrWhereMonth<TValue>(Expression<Func<TModel, TValue>> column, string month)
+        {
+            return OrWhereMonth(ModelPropertyExpression.GetName(column, nameof(OrWhereMonth)), month);
+        }
+
         public QueryBuilder<TModel> OrWhereDay(string Column, string Day)
         {
             InitWhere(Column, Day, null, LogicalOperators.ORWHEREDAY);
             return this;
         }
+
+        public QueryBuilder<TModel> OrWhereDay<TValue>(Expression<Func<TModel, TValue>> column, string day)
+        {
+            return OrWhereDay(ModelPropertyExpression.GetName(column, nameof(OrWhereDay)), day);
+        }
+
 
         /// <summary>
         ///    
@@ -1787,6 +2076,17 @@ namespace DapperGlib
             LogicalOperators logicalOperator = Enum.TryParse(ComparisonType.ToString(), out LogicalOperators outValue) ? outValue : LogicalOperators.YEAR;
             InitWhere(Column, Date, ComparisonOperator, logicalOperator, Difference, Invert);
             return this;
+        }
+
+
+        public QueryBuilder<TModel> WhereDateDiff<TValue>(Expression<Func<TModel, TValue>> column, string date, int difference, DateDiff comparisonType, bool invert = false)
+        {
+            return WhereDateDiff(ModelPropertyExpression.GetName(column, nameof(WhereDateDiff)), date, difference, comparisonType, invert);
+        }
+
+        public QueryBuilder<TModel> WhereDateDiff<TValue>(Expression<Func<TModel, TValue>> column, string date, string comparisonOperator, int difference, DateDiff comparisonType, bool invert = false)
+        {
+            return WhereDateDiff(ModelPropertyExpression.GetName(column, nameof(WhereDateDiff)), date, comparisonOperator, difference, comparisonType, invert);
         }
 
 
@@ -1838,10 +2138,25 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereColumn<TFirst, TSecond>(Expression<Func<TModel, TFirst>> firstColumn, Expression<Func<TModel, TSecond>> secondColumn)
+        {
+            return WhereColumn(ModelPropertyExpression.GetName(firstColumn, nameof(WhereColumn)), ModelPropertyExpression.GetName(secondColumn, nameof(WhereColumn)));
+        }
+
+        public QueryBuilder<TModel> WhereColumn<TFirst, TSecond>(Expression<Func<TModel, TFirst>> firstColumn, string comparisonOperator, Expression<Func<TModel, TSecond>> secondColumn)
+        {
+            return WhereColumn(ModelPropertyExpression.GetName(firstColumn, nameof(WhereColumn)), comparisonOperator, ModelPropertyExpression.GetName(secondColumn, nameof(WhereColumn)));
+        }
+
         public QueryBuilder<TModel> WhereBetween(string Column, Between Value)
         {
             InitWhere(Column, Value, null, LogicalOperators.BETWEEN);
             return this;
+        }
+
+        public QueryBuilder<TModel> WhereBetween<TValue>(Expression<Func<TModel, TValue>> column, Between value)
+        {
+            return WhereBetween(ModelPropertyExpression.GetName(column, nameof(WhereBetween)), value);
         }
 
         public QueryBuilder<TModel> WhereNotBetween(string Column, Between Value)
@@ -1850,10 +2165,20 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereNotBetween<TValue>(Expression<Func<TModel, TValue>> column, Between value)
+        {
+            return WhereNotBetween(ModelPropertyExpression.GetName(column, nameof(WhereNotBetween)), value);
+        }
+
         public QueryBuilder<TModel> WhereDateBetween(string Column, DateBetween Value)
         {
             InitWhere(Column, Value, null, LogicalOperators.DATEBETWEEN);
             return this;
+        }
+
+        public QueryBuilder<TModel> WhereDateBetween<TValue>(Expression<Func<TModel, TValue>> column, DateBetween value)
+        {
+            return WhereDateBetween(ModelPropertyExpression.GetName(column, nameof(WhereDateBetween)), value);
         }
 
         public QueryBuilder<TModel> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
@@ -1904,6 +2229,87 @@ namespace DapperGlib
             return this;
         }
 
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas<TRelationship>(GetHasManyRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas<TRelationship>(GetSingleRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetHasManyRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetSingleRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas<TRelationship>(GetHasManyRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas<TRelationship>(GetSingleRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetHasManyRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetSingleRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public QueryBuilder<TModel> WhereDoesntHave<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereDoesntHave(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> WhereDoesntHave<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereDoesntHave(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> OrWhereDoesntHave<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereDoesntHave(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public QueryBuilder<TModel> OrWhereDoesntHave<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereDoesntHave(GetSingleRelationshipName(relationship), builder);
+        }
+
+
         public QueryBuilder<TModel> When(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {
             InitWhen(Condition, Builder);
@@ -1917,9 +2323,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (CountsRelationship.Count > 0)
+            if (RelationshipProjections.Count > 0)
             {
-                throw new ApplicationException("Distinct method is incompatible with the WithCount method");
+                throw new QueryBuilderException("Distinct is incompatible with relationship projections such as WithCount.");
             }
 
             Query.Replace("_selector_all", $"{Clauses.DISTINCT} *");
@@ -1940,12 +2346,9 @@ namespace DapperGlib
                 SimpleQuery();
             }
 
-            if (CountsRelationship.Count > 0)
+            if (RelationshipProjections.Count > 0)
             {
-                throw new ApplicationException(
-                    "Distinct method is incompatible " +
-                    "with the WithCount method"
-                );
+                throw new QueryBuilderException("Distinct is incompatible with relationship projections such as WithCount.");
             }
 
             Query.Replace(
@@ -1956,65 +2359,242 @@ namespace DapperGlib
             return this;
         }
 
-        public QueryBuilder<TModel> WithCount(string Relationship, string? Alias = null)
+
+        public QueryBuilder<TModel> WithCount(string relationship, string? alias = null)
         {
+            if (!CheckQueryInit()) SimpleQuery();
 
-            try
-            {
-                if (!CheckQueryInit())
-                {
-                    SimpleQuery();
-                }
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
 
-                if (Query != null && Query.ToString().Contains(Clauses.DISTINCT.ToString()))
-                {
-                    throw new ApplicationException("WithCount method is incompatible with the Distinct method");
-                }
-
-                var property = Instance.GetType().GetProperty(Relationship);
-                var method = Instance.GetType().GetMethod(Relationship);
-
-                dynamic? result = null;
-
-                if (property != null)
-                {
-                    result = property.GetValue(Instance)!;
-                }
-                else if (method != null)
-                {
-                    result = method.Invoke(Instance, null)!;
-                }
-
-                var parts = result!.GetQuery().Split("=");
-
-                string OwnTable = GetTableName();
-
-                string countQuery = string.Concat(parts[0], $" = {OwnTable}.{result.LocalKey}").Replace("_selector_all", "count(*)");
-
-                var regex = new Regex(Regex.Escape("_selector_all"));
-                var match = regex.Match(Query!.ToString());
-
-                int IndexSelector = match.Index + "_selector_all".Length;
-
-                string alias = Alias ?? $"{Relationship}_Count";
-
-                CountsRelationship.Add($", ({countQuery}) as {alias} ");
-
-                string replaced = Query.ToString().Insert(IndexSelector, $" count_relationship_{CountsRelationship.Count} ");
-
-                Query = new(replaced);
-            }
-            catch (NullReferenceException)
-            {
-                throw new RelationshipException(
-                    $"Relationship '{Relationship}' was not found " +
-                    $"on model '{Instance.GetType().Name}'."
-                );
-            }
-
-
-            return this;
+            return AddRelationshipCount(definition, alias);
         }
+
+        public QueryBuilder<TModel> WithCount<TRelated>(string relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipCount(definition, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithCount<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithCount(GetHasManyRelationshipName(relationship), alias);
+        }
+
+        public QueryBuilder<TModel> WithCount<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithCount<TRelated>(GetHasManyRelationshipName(relationship), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithCount<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithCount(GetSingleRelationshipName(relationship), alias);
+        }
+
+        public QueryBuilder<TModel> WithCount<TRelated>(Expression<Func<TModel, TRelated?>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithCount<TRelated>(GetSingleRelationshipName(relationship), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithExists(string relationship, string? alias = null)
+        {
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipExists(definition, alias);
+        }
+
+        public QueryBuilder<TModel> WithExists<TRelated>(string relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipExists(definition, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithExists<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithExists(GetHasManyRelationshipName(relationship), alias);
+        }
+
+        public QueryBuilder<TModel> WithExists<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithExists<TRelated>(GetHasManyRelationshipName(relationship), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithExists<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithExists(GetSingleRelationshipName(relationship), alias);
+        }
+
+        public QueryBuilder<TModel> WithExists<TRelated>(Expression<Func<TModel, TRelated?>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithExists<TRelated>(GetSingleRelationshipName(relationship), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithSum(string relationship, string column, string? alias = null)
+        {
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "SUM", "Sum", nameof(WithSum), alias);
+        }
+
+        public QueryBuilder<TModel> WithSum<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "SUM", "Sum", nameof(WithSum), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithSum<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithSum(GetHasManyRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithSum<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithSum(GetHasManyRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithSum<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithSum(GetSingleRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithSum<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithSum(GetSingleRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg(string relationship, string column, string? alias = null)
+        {
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "AVG", "Avg", nameof(WithAvg), alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "AVG", "Avg", nameof(WithAvg), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithAvg(GetHasManyRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithAvg(GetHasManyRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithAvg(GetSingleRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithAvg<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithAvg(GetSingleRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMin(string relationship, string column, string? alias = null)
+        {
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "MIN", "Min", nameof(WithMin), alias);
+        }
+
+        public QueryBuilder<TModel> WithMin<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "MIN", "Min", nameof(WithMin), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMin<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMin(GetHasManyRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithMin<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMin(GetHasManyRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMin<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMin(GetSingleRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithMin<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMin(GetSingleRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMax(string relationship, string column, string? alias = null)
+        {
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "MAX", "Max", nameof(WithMax), alias);
+        }
+
+        public QueryBuilder<TModel> WithMax<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
+            if (!CheckQueryInit()) SimpleQuery();
+
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), relationship);
+
+            return AddRelationshipAggregate(definition, column, "MAX", "Max", nameof(WithMax), constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMax<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMax(GetHasManyRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithMax<TRelated>(Expression<Func<TModel, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMax(GetHasManyRelationshipName(relationship), column, constraint, alias);
+        }
+
+        public QueryBuilder<TModel> WithMax<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMax(GetSingleRelationshipName(relationship), column, alias);
+        }
+
+        public QueryBuilder<TModel> WithMax<TRelated>(Expression<Func<TModel, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return WithMax(GetSingleRelationshipName(relationship), column, constraint, alias);
+        }
+
+
 
         public QueryBuilder<TModel> GroupBy(params string[] Columns)
         {
@@ -2121,6 +2701,341 @@ namespace DapperGlib
 
             return this;
         }
+
+
+        private void EnsureNoEagerLoadsForProjection(string methodName)
+        {
+            if (EagerLoads.HasLoads)
+            {
+                throw new RelationshipException($"{methodName} cannot be used with With() because eager loading requires materializing model '{typeof(TModel).Name}'. Remove With() or use the non-projection terminal method.");
+            }
+        }
+
+        private static string GetRequiredPrimaryKeyNameForFind()
+        {
+            PropertyInfo? primaryKey = GetPropertyInfoByAttribute(typeof(PrimaryKey));
+
+            if (primaryKey == null)
+            {
+                throw new ModelConfigurationException($"Primary key is not defined for model '{typeof(TModel).Name}'. Add the [PrimaryKey] attribute to the appropriate property.");
+            }
+
+            return primaryKey.Name;
+        }
+
+        private QueryBuilder<TModel> AddRelationshipCount(RelationshipDefinition definition, string? alias)
+        {
+            EnsureRelationshipProjectionCanBeAdded(nameof(WithCount));
+
+            object relatedInstance = CreateRelationshipModelInstance(definition.RelatedType);
+
+            EnsureRelationshipProjectionSameConnection(definition, relatedInstance, nameof(WithCount));
+
+            string relatedTable = GetTableName(relatedInstance);
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_Count");
+
+            string countQuery = $"SELECT COUNT(*) FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}";
+
+            AddRelationshipProjection(countQuery, projectionAlias);
+
+            return this;
+        }
+
+        private QueryBuilder<TModel> AddRelationshipCount<TRelated>(RelationshipDefinition definition, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias) where TRelated : Model<TRelated>, new()
+        {
+            EnsureRelationshipProjectionCanBeAdded(nameof(WithCount));
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but WithCount was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            EnsureRelationshipProjectionSameConnection(definition, QueryBuilder<TRelated>.GetConnectionString(), nameof(WithCount));
+
+            string relatedTable = QueryBuilder<TRelated>.GetTableName();
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_Count");
+
+            var countBuilder = new SubQuery<TRelated>($"SELECT COUNT(*) FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}", Clauses.EXISTS, ParameterContext)
+            {
+                ConditionsAdded = 1
+            };
+
+            SubQuery<TRelated>? constrainedBuilder = constraint(countBuilder);
+
+            if (constrainedBuilder == null)
+            {
+                throw new RelationshipException($"WithCount constraint for relationship '{definition.Name}' returned null.");
+            }
+
+            if (!ReferenceEquals(constrainedBuilder, countBuilder))
+            {
+                throw new RelationshipException($"WithCount constraint for relationship '{definition.Name}' must configure and return the SubQuery instance provided by DapperGlib.");
+            }
+
+            AddRelationshipProjection(countBuilder.ToParameterizedSql(), projectionAlias);
+
+            return this;
+        }
+
+
+        private QueryBuilder<TModel> AddRelationshipExists(RelationshipDefinition definition, string? alias)
+        {
+            EnsureRelationshipProjectionCanBeAdded(nameof(WithExists));
+
+            object relatedInstance = CreateRelationshipModelInstance(definition.RelatedType);
+
+            EnsureRelationshipProjectionSameConnection(definition, relatedInstance, nameof(WithExists));
+
+            string relatedTable = GetTableName(relatedInstance);
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_Exists");
+
+            string existsQuery = $"SELECT 1 FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}";
+            string projection = $"CASE WHEN EXISTS ({existsQuery}) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END";
+
+            AddRelationshipProjection(projection, projectionAlias);
+
+            return this;
+        }
+
+        private QueryBuilder<TModel> AddRelationshipExists<TRelated>(RelationshipDefinition definition, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias) where TRelated : Model<TRelated>, new()
+        {
+            EnsureRelationshipProjectionCanBeAdded(nameof(WithExists));
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but WithExists was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            EnsureRelationshipProjectionSameConnection(definition, QueryBuilder<TRelated>.GetConnectionString(), nameof(WithExists));
+
+            string relatedTable = QueryBuilder<TRelated>.GetTableName();
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_Exists");
+
+            var existsBuilder = new SubQuery<TRelated>($"SELECT 1 FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}", Clauses.EXISTS, ParameterContext)
+            {
+                ConditionsAdded = 1
+            };
+
+            SubQuery<TRelated>? constrainedBuilder = constraint(existsBuilder);
+
+            if (constrainedBuilder == null)
+            {
+                throw new RelationshipException($"WithExists constraint for relationship '{definition.Name}' returned null.");
+            }
+
+            if (!ReferenceEquals(constrainedBuilder, existsBuilder))
+            {
+                throw new RelationshipException($"WithExists constraint for relationship '{definition.Name}' must configure and return the SubQuery instance provided by DapperGlib.");
+            }
+
+            string projection = $"CASE WHEN EXISTS ({existsBuilder.ToParameterizedSql()}) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END";
+
+            AddRelationshipProjection(projection, projectionAlias);
+
+            return this;
+        }
+
+
+        private QueryBuilder<TModel> AddRelationshipAggregate(RelationshipDefinition definition, string column, string aggregateFunction, string aggregateSuffix, string operationName, string? alias)
+        {
+            EnsureRelationshipProjectionCanBeAdded(operationName);
+
+            object relatedInstance = CreateRelationshipModelInstance(definition.RelatedType);
+
+            EnsureRelationshipProjectionSameConnection(definition, relatedInstance, operationName);
+
+            string relatedColumn = ValidateRelationshipAggregateColumn(definition.RelatedType, column, operationName);
+            string relatedTable = GetTableName(relatedInstance);
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_{relatedColumn}_{aggregateSuffix}");
+
+            string aggregateQuery = $"SELECT {aggregateFunction}({relatedTable}.{relatedColumn}) FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}";
+
+            AddRelationshipProjection(aggregateQuery, projectionAlias);
+
+            return this;
+        }
+
+        private QueryBuilder<TModel> AddRelationshipAggregate<TRelated>(RelationshipDefinition definition, string column, string aggregateFunction, string aggregateSuffix, string operationName, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias) where TRelated : Model<TRelated>, new()
+        {
+            EnsureRelationshipProjectionCanBeAdded(operationName);
+
+            if (definition.RelatedType != typeof(TRelated))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but {operationName} was requested with '{typeof(TRelated).Name}'.");
+            }
+
+            EnsureRelationshipProjectionSameConnection(definition, QueryBuilder<TRelated>.GetConnectionString(), operationName);
+
+            string relatedColumn = ValidateRelationshipAggregateColumn(typeof(TRelated), column, operationName);
+            string relatedTable = QueryBuilder<TRelated>.GetTableName();
+            string ownTable = GetTableName();
+            string projectionAlias = ValidateRelationshipProjectionAlias(alias ?? $"{definition.Name}_{relatedColumn}_{aggregateSuffix}");
+
+            var aggregateBuilder = new SubQuery<TRelated>($"SELECT {aggregateFunction}({relatedTable}.{relatedColumn}) FROM {relatedTable} WHERE {relatedTable}.{definition.RelatedKey} = {ownTable}.{definition.LocalKey}", Clauses.EXISTS, ParameterContext)
+            {
+                ConditionsAdded = 1
+            };
+
+            SubQuery<TRelated>? constrainedBuilder = constraint(aggregateBuilder);
+
+            if (constrainedBuilder == null)
+            {
+                throw new RelationshipException($"{operationName} constraint for relationship '{definition.Name}' returned null.");
+            }
+
+            if (!ReferenceEquals(constrainedBuilder, aggregateBuilder))
+            {
+                throw new RelationshipException($"{operationName} constraint for relationship '{definition.Name}' must configure and return the SubQuery instance provided by DapperGlib.");
+            }
+
+            AddRelationshipProjection(aggregateBuilder.ToParameterizedSql(), projectionAlias);
+
+            return this;
+        }
+
+
+
+        private void AddRelationshipProjection(string sql, string alias)
+        {
+            string queryText = Query.ToString();
+            Match match = Regex.Match(queryText, Regex.Escape("_selector_all"));
+
+            if (!match.Success)
+            {
+                throw new QueryBuilderException("Relationship projection cannot be added because the query does not contain a model selector.");
+            }
+
+            RelationshipProjections.Add($", ({sql}) AS [{alias}] ");
+
+            int selectorEnd = match.Index + "_selector_all".Length;
+
+            Query = new StringBuilder(queryText.Insert(selectorEnd, $" relationship_projection_{RelationshipProjections.Count} "));
+        }
+
+        private void EnsureRelationshipProjectionCanBeAdded(string operationName)
+        {
+            if (Query.ToString().Contains(Clauses.DISTINCT.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new QueryBuilderException($"{operationName} is incompatible with Distinct.");
+            }
+        }
+
+        private static object CreateRelationshipModelInstance(Type modelType)
+        {
+            try
+            {
+                return Activator.CreateInstance(modelType) ?? throw new RelationshipException($"Unable to create an instance of related model '{modelType.Name}'.");
+            }
+            catch (RelationshipException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new RelationshipException($"Unable to create an instance of related model '{modelType.Name}'.", ex);
+            }
+        }
+
+        private void EnsureRelationshipProjectionSameConnection(RelationshipDefinition definition, object relatedInstance, string operationName)
+        {
+            PropertyInfo? connectionProperty = relatedInstance.GetType().GetProperty("Connection", BindingFlags.Instance | BindingFlags.Public);
+            string relatedConnection = connectionProperty?.GetValue(relatedInstance) as string ?? "SqlConnection";
+
+            EnsureRelationshipProjectionSameConnection(definition, relatedConnection, operationName);
+        }
+
+        private void EnsureRelationshipProjectionSameConnection(RelationshipDefinition definition, string relatedConnection, string operationName)
+        {
+            string ownConnection = GetConnectionString();
+
+            if (!string.Equals(ownConnection, relatedConnection, StringComparison.Ordinal))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' between '{typeof(TModel).Name}' and '{definition.RelatedType.Name}' cannot be used with {operationName} because they use different connection keys. Parent connection: '{ownConnection}'. Related connection: '{relatedConnection}'. Cross-connection relationship projections are not supported.");
+            }
+        }
+
+        private static string ValidateRelationshipProjectionAlias(string alias)
+        {
+            if (string.IsNullOrWhiteSpace(alias))
+            {
+                throw new QueryBuilderException("Relationship projection alias cannot be null or empty.");
+            }
+
+            string value = alias.Trim();
+
+            if (value.Length > 128 || !Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+            {
+                throw new QueryBuilderException($"Relationship projection alias '{alias}' is invalid. Use letters, numbers and underscores, beginning with a letter or underscore.");
+            }
+
+            return value;
+        }
+
+        private static string ValidateRelationshipAggregateColumn(Type relatedType, string column, string operationName)
+        {
+            if (string.IsNullOrWhiteSpace(column))
+            {
+                throw new QueryBuilderException($"{operationName} requires a valid related column.");
+            }
+
+            string value = column.Trim();
+
+            if (!Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+            {
+                throw new QueryBuilderException($"Related aggregate column '{column}' is invalid.");
+            }
+
+            PropertyInfo? property = relatedType.GetProperty(value, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+
+            if (property == null)
+            {
+                throw new QueryBuilderException($"{operationName} cannot aggregate column '{column}' because property '{column}' was not found on related model '{relatedType.Name}'.");
+            }
+
+            return property.Name;
+        }
+
+        private static string GetHasManyRelationshipName<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship) where TRelationship : Model<TRelationship>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind != RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as '{definition.Kind}' and cannot be used as a collection relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelationship))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
+            }
+
+            return definition.Name;
+        }
+
+        private static string GetSingleRelationshipName<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship) where TRelationship : Model<TRelationship>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind == RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as 'HasMany' and cannot be used as a single relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelationship))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
+            }
+
+            return definition.Name;
+        }
+
 
         internal void AddClause(Clauses Clause)
         {

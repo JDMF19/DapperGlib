@@ -6,11 +6,13 @@ using System.Reflection;
 using DapperGlib.Internal;
 using Microsoft.Data.SqlClient;
 using System.Threading;
+using DapperGlib.Relationships;
+using System.Linq.Expressions;
 
 namespace DapperGlib
 {
 
-    public abstract class Model<T> : IModel where T : Model<T>, new()
+    public abstract class Model<T> : IModel, IRelationshipLoadState where T : Model<T>, new()
     {
 
 
@@ -25,6 +27,8 @@ namespace DapperGlib
 
 
         protected static readonly object Instance = Activator.CreateInstance(typeof(T)) ?? (new());
+
+        private readonly HashSet<string> _loadedRelationships = new(StringComparer.Ordinal);
 
         public Model()
         {
@@ -988,6 +992,47 @@ namespace DapperGlib
 
         #endregion
 
+
+        public static QueryBuilder<T> With(string relationship)
+        {
+            return new QueryBuilder<T>().With(relationship);
+        }
+
+        public static QueryBuilder<T> With<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().With(relationship);
+        }
+
+        public static QueryBuilder<T> With<TRelated>(Expression<Func<T, TRelated?>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().With(relationship);
+        }
+
+        public static QueryBuilder<T> With(params string[] relationships)
+        {
+            return new QueryBuilder<T>().With(relationships);
+        }
+
+        public static QueryBuilder<T> With(params Expression<Func<T, object?>>[] relationships)
+        {
+            return new QueryBuilder<T>().With(relationships);
+        }
+
+        public static QueryBuilder<T> With<TRelated>(string relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().With(relationship, constraint);
+        }
+
+        public static QueryBuilder<T> With<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().With(relationship, constraint);
+        }
+
+        public static QueryBuilder<T> With<TRelated>(Expression<Func<T, TRelated?>> relationship, Action<EagerLoadBuilder<TRelated>> constraint) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().With(relationship, constraint);
+        }
+
         public static QueryBuilder<T> Query()
         {
             var Builder = new QueryBuilder<T>().SimpleQuery();
@@ -1060,6 +1105,16 @@ namespace DapperGlib
             return Builder_;
         }
 
+        public static QueryBuilder<T> Where<TValue>(Expression<Func<T, TValue>> column, TValue value)
+        {
+            return new QueryBuilder<T>().Where(column, value);
+        }
+
+        public static QueryBuilder<T> Where<TValue>(Expression<Func<T, TValue>> column, string comparisonOperator, TValue value)
+        {
+            return new QueryBuilder<T>().Where(column, comparisonOperator, value);
+        }
+
         public static QueryBuilder<T> WhereLike(string Column, string Pattern)
         {
             return new QueryBuilder<T>()
@@ -1069,6 +1124,12 @@ namespace DapperGlib
                 );
         }
 
+        public static QueryBuilder<T> WhereLike(Expression<Func<T, string?>> column, string pattern)
+        {
+            return new QueryBuilder<T>().WhereLike(column, pattern);
+        }
+
+
         public static QueryBuilder<T> WhereContains(string Column, string Value)
         {
             return new QueryBuilder<T>()
@@ -1077,6 +1138,12 @@ namespace DapperGlib
                     Value
                 );
         }
+
+        public static QueryBuilder<T> WhereContains(Expression<Func<T, string?>> column, string value)
+        {
+            return new QueryBuilder<T>().WhereContains(column, value);
+        }
+
 
         public static QueryBuilder<T> WhereNot(Func<SubQuery<T>, SubQuery<T>> Builder)
         {
@@ -1092,7 +1159,18 @@ namespace DapperGlib
             return new QueryBuilder<T>().WhereIn(column, values);
         }
 
+        public static QueryBuilder<T> WhereIn<TValue>(Expression<Func<T, TValue>> column, IEnumerable<TValue> values)
+        {
+            return new QueryBuilder<T>().WhereIn(column, values);
+        }
+
+
         public static QueryBuilder<T> WhereNotIn<TValue>(string column, IEnumerable<TValue> values)
+        {
+            return new QueryBuilder<T>().WhereNotIn(column, values);
+        }
+
+        public static QueryBuilder<T> WhereNotIn<TValue>(Expression<Func<T, TValue>> column, IEnumerable<TValue> values)
         {
             return new QueryBuilder<T>().WhereNotIn(column, values);
         }
@@ -1104,11 +1182,21 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereNull<TValue>(Expression<Func<T, TValue>> column)
+        {
+            return new QueryBuilder<T>().WhereNull(column);
+        }
+
         public static QueryBuilder<T> WhereNotNull(string Column)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereNotNull(Column);
 
             return Builder;
+        }
+
+        public static QueryBuilder<T> WhereNotNull<TValue>(Expression<Func<T, TValue>> column)
+        {
+            return new QueryBuilder<T>().WhereNotNull(column);
         }
 
         public static QueryBuilder<T> WhereDate(string Column, string Date)
@@ -1117,10 +1205,19 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereDate<TValue>(Expression<Func<T, TValue>> column, string date)
+        {
+            return new QueryBuilder<T>().WhereDate(column, date);
+        }
+
         public static QueryBuilder<T> WhereYear(string Column, string Year)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereYear(Column, Year);
             return Builder;
+        }
+        public static QueryBuilder<T> WhereYear<TValue>(Expression<Func<T, TValue>> column, string year)
+        {
+            return new QueryBuilder<T>().WhereYear(column, year);
         }
 
         public static QueryBuilder<T> WhereMonth(string Column, string Month)
@@ -1128,11 +1225,20 @@ namespace DapperGlib
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereMonth(Column, Month);
             return Builder;
         }
+        public static QueryBuilder<T> WhereMonth<TValue>(Expression<Func<T, TValue>> column, string month)
+        {
+            return new QueryBuilder<T>().WhereMonth(column, month);
+        }
 
         public static QueryBuilder<T> WhereDay(string Column, string Day)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDay(Column, Day);
             return Builder;
+        }
+
+        public static QueryBuilder<T> WhereDay<TValue>(Expression<Func<T, TValue>> column, string day)
+        {
+            return new QueryBuilder<T>().WhereDay(column, day);
         }
 
         /// <summary>
@@ -1157,6 +1263,17 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereDateDiff<TValue>(Expression<Func<T, TValue>> column, string date, int difference, DateDiff comparisonType, bool invert = false)
+        {
+            return new QueryBuilder<T>().WhereDateDiff(column, date, difference, comparisonType, invert);
+        }
+
+        public static QueryBuilder<T> WhereDateDiff<TValue>(Expression<Func<T, TValue>> column, string date, string comparisonOperator, int difference, DateDiff comparisonType, bool invert = false)
+        {
+            return new QueryBuilder<T>().WhereDateDiff(column, date, comparisonOperator, difference, comparisonType, invert);
+        }
+
+
         public static QueryBuilder<T> WhereColumn(string FirstColumn, string SecondColumn)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereColumn(FirstColumn, SecondColumn);
@@ -1170,10 +1287,25 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereColumn<TFirst, TSecond>(Expression<Func<T, TFirst>> firstColumn, Expression<Func<T, TSecond>> secondColumn)
+        {
+            return new QueryBuilder<T>().WhereColumn(firstColumn, secondColumn);
+        }
+
+        public static QueryBuilder<T> WhereColumn<TFirst, TSecond>(Expression<Func<T, TFirst>> firstColumn, string comparisonOperator, Expression<Func<T, TSecond>> secondColumn)
+        {
+            return new QueryBuilder<T>().WhereColumn(firstColumn, comparisonOperator, secondColumn);
+        }
+
         public static QueryBuilder<T> WhereBetween(string Column, Between Value)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereBetween(Column, Value);
             return Builder;
+        }
+
+        public static QueryBuilder<T> WhereBetween<TValue>(Expression<Func<T, TValue>> column, Between value)
+        {
+            return new QueryBuilder<T>().WhereBetween(column, value);
         }
 
         public static QueryBuilder<T> WhereNotBetween(string Column, Between Value)
@@ -1182,10 +1314,20 @@ namespace DapperGlib
             return Builder;
         }
 
+        public static QueryBuilder<T> WhereNotBetween<TValue>(Expression<Func<T, TValue>> column, Between value)
+        {
+            return new QueryBuilder<T>().WhereNotBetween(column, value);
+        }
+
         public static QueryBuilder<T> WhereDateBetween(string Column, DateBetween Value)
         {
             QueryBuilder<T> Builder = new QueryBuilder<T>().WhereDateBetween(Column, Value);
             return Builder;
+        }
+
+        public static QueryBuilder<T> WhereDateBetween<TValue>(Expression<Func<T, TValue>> column, DateBetween value)
+        {
+            return new QueryBuilder<T>().WhereDateBetween(column, value);
         }
 
         public static QueryBuilder<T> WhereHas<TRelationship>(string Relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? Builder = null)
@@ -1224,6 +1366,46 @@ namespace DapperGlib
             return Builder_;
         }
 
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, builder);
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, builder);
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, IEnumerable<TRelationship>>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, comparisonOperator, value);
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, TRelationship?>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, comparisonOperator, value);
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, builder, comparisonOperator, value);
+        }
+
+        public static QueryBuilder<T> WhereHas<TRelationship>(Expression<Func<T, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereHas(relationship, builder, comparisonOperator, value);
+        }
+
+        public static QueryBuilder<T> WhereDoesntHave<TRelationship>(Expression<Func<T, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereDoesntHave(relationship, builder);
+        }
+
+        public static QueryBuilder<T> WhereDoesntHave<TRelationship>(Expression<Func<T, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return new QueryBuilder<T>("").WhereDoesntHave(relationship, builder);
+        }
+
         public static QueryBuilder<T> When(bool Condition, Func<SubQuery<T>, SubQuery<T>>? Builder = null)
         {
 
@@ -1248,12 +1430,187 @@ namespace DapperGlib
             return Builder;
         }
 
-        public static QueryBuilder<T> WithCount(string Relationship)
+        public static QueryBuilder<T> WithCount(string relationship, string? alias = null)
         {
-            QueryBuilder<T> Builder = new QueryBuilder<T>().WithCount(Relationship);
-
-            return Builder;
+            return new QueryBuilder<T>().WithCount(relationship, alias);
         }
+
+        public static QueryBuilder<T> WithCount<TRelated>(string relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithCount(relationship, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithCount<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithCount(relationship, alias);
+        }
+
+        public static QueryBuilder<T> WithCount<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithCount(relationship, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithCount<TRelated>(Expression<Func<T, TRelated?>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithCount(relationship, alias);
+        }
+
+        public static QueryBuilder<T> WithCount<TRelated>(Expression<Func<T, TRelated?>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithCount(relationship, constraint, alias);
+        }
+
+
+        public static QueryBuilder<T> WithExists(string relationship, string? alias = null)
+        {
+            return new QueryBuilder<T>().WithExists(relationship, alias);
+        }
+
+        public static QueryBuilder<T> WithExists<TRelated>(string relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithExists(relationship, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithExists<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithExists(relationship, alias);
+        }
+
+        public static QueryBuilder<T> WithExists<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithExists(relationship, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithExists<TRelated>(Expression<Func<T, TRelated?>> relationship, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithExists(relationship, alias);
+        }
+
+        public static QueryBuilder<T> WithExists<TRelated>(Expression<Func<T, TRelated?>> relationship, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithExists(relationship, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithSum(string relationship, string column, string? alias = null)
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithSum<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithSum<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithSum<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithSum<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithSum<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithSum(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg(string relationship, string column, string? alias = null)
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithAvg<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithAvg(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMin(string relationship, string column, string? alias = null)
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMin<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMin<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMin<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMin<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMin<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMin(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMax(string relationship, string column, string? alias = null)
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMax<TRelated>(string relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMax<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMax<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, constraint, alias);
+        }
+
+        public static QueryBuilder<T> WithMax<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, alias);
+        }
+
+        public static QueryBuilder<T> WithMax<TRelated>(Expression<Func<T, TRelated?>> relationship, string column, Func<SubQuery<TRelated>, SubQuery<TRelated>> constraint, string? alias = null) where TRelated : Model<TRelated>, new()
+        {
+            return new QueryBuilder<T>().WithMax(relationship, column, constraint, alias);
+        }
+
 
         public static QueryBuilder<T> OrderBy(string Column, string Direction = "ASC")
         {
@@ -1290,8 +1647,200 @@ namespace DapperGlib
 
 
 
-        // Helpers
+        public RelationshipQuery<TRelated> Relation<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(T));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(T), property.Name);
 
+            if (definition.Kind != RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(T).Name}' is configured as '{definition.Kind}' and cannot be accessed as a collection relationship.");
+            }
+
+            return new RelationshipQuery<TRelated>(this, definition);
+        }
+
+        public RelationshipQuery<TRelated> Relation<TRelated>(Expression<Func<T, TRelated?>> relationship) where TRelated : Model<TRelated>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(T));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(T), property.Name);
+
+            if (definition.Kind == RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(T).Name}' is configured as 'HasMany' and must be accessed as a collection relationship.");
+            }
+
+            return new RelationshipQuery<TRelated>(this, definition);
+        }
+
+
+        public bool IsRelationLoaded(string relationship)
+        {
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(T), relationship);
+            return _loadedRelationships.Contains(definition.Name);
+        }
+
+        public bool IsRelationLoaded(Expression<Func<T, object?>> relationship)
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(T));
+            return IsRelationLoaded(property.Name);
+        }
+
+        public T Load(params string[] relationships)
+        {
+            EagerLoadPlan plan = BuildEagerLoadPlan(relationships, false, nameof(Load));
+
+            if (plan.HasLoads)
+            {
+                EagerLoader.Load(new[] { (T)this }, plan);
+            }
+
+            return (T)this;
+        }
+
+        public T Load(params Expression<Func<T, object?>>[] relationships)
+        {
+            return Load(GetRelationshipNames(relationships, nameof(Load)));
+        }
+
+        public Task<T> LoadAsync(params string[] relationships)
+        {
+            return LoadAsync(CancellationToken.None, relationships);
+        }
+
+        public async Task<T> LoadAsync(CancellationToken cancellationToken, params string[] relationships)
+        {
+            EagerLoadPlan plan = BuildEagerLoadPlan(relationships, false, nameof(LoadAsync));
+
+            if (plan.HasLoads)
+            {
+                await EagerLoader.LoadAsync(new[] { (T)this }, plan, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            return (T)this;
+        }
+
+        public Task<T> LoadAsync(params Expression<Func<T, object?>>[] relationships)
+        {
+            return LoadAsync(CancellationToken.None, relationships);
+        }
+
+        public Task<T> LoadAsync(CancellationToken cancellationToken, params Expression<Func<T, object?>>[] relationships)
+        {
+            return LoadAsync(cancellationToken, GetRelationshipNames(relationships, nameof(LoadAsync)));
+        }
+
+        public T LoadMissing(params string[] relationships)
+        {
+            EagerLoadPlan plan = BuildEagerLoadPlan(relationships, true, nameof(LoadMissing));
+
+            if (plan.HasLoads)
+            {
+                EagerLoader.Load(new[] { (T)this }, plan);
+            }
+
+            return (T)this;
+        }
+
+        public T LoadMissing(params Expression<Func<T, object?>>[] relationships)
+        {
+            return LoadMissing(GetRelationshipNames(relationships, nameof(LoadMissing)));
+        }
+
+        public Task<T> LoadMissingAsync(params string[] relationships)
+        {
+            return LoadMissingAsync(CancellationToken.None, relationships);
+        }
+
+        public async Task<T> LoadMissingAsync(CancellationToken cancellationToken, params string[] relationships)
+        {
+            EagerLoadPlan plan = BuildEagerLoadPlan(relationships, true, nameof(LoadMissingAsync));
+
+            if (plan.HasLoads)
+            {
+                await EagerLoader.LoadAsync(new[] { (T)this }, plan, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            return (T)this;
+        }
+
+        public Task<T> LoadMissingAsync(params Expression<Func<T, object?>>[] relationships)
+        {
+            return LoadMissingAsync(CancellationToken.None, relationships);
+        }
+
+        public Task<T> LoadMissingAsync(CancellationToken cancellationToken, params Expression<Func<T, object?>>[] relationships)
+        {
+            return LoadMissingAsync(cancellationToken, GetRelationshipNames(relationships, nameof(LoadMissingAsync)));
+        }
+
+        bool IRelationshipLoadState.IsRelationLoadedInternal(string relationshipName)
+        {
+            return _loadedRelationships.Contains(relationshipName);
+        }
+
+        void IRelationshipLoadState.MarkRelationLoadedInternal(string relationshipName)
+        {
+            if (!string.IsNullOrWhiteSpace(relationshipName))
+            {
+                _loadedRelationships.Add(relationshipName);
+            }
+        }
+
+        private EagerLoadPlan BuildEagerLoadPlan(IEnumerable<string> relationships, bool onlyMissing, string methodName)
+        {
+            if (relationships == null)
+            {
+                throw new ArgumentNullException(nameof(relationships));
+            }
+
+            string[] names = relationships.ToArray();
+
+            if (names.Length == 0)
+            {
+                throw new ArgumentException($"{methodName} requires at least one relationship.", nameof(relationships));
+            }
+
+            var plan = new EagerLoadPlan();
+
+            foreach (string relationship in names)
+            {
+                if (string.IsNullOrWhiteSpace(relationship))
+                {
+                    throw new RelationshipException($"{methodName} contains an invalid relationship name on model '{typeof(T).Name}'.");
+                }
+
+                RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(T), relationship.Trim());
+
+                if (!onlyMissing || !_loadedRelationships.Contains(definition.Name))
+                {
+                    plan.Add(typeof(T), definition.Name);
+                }
+            }
+
+            return plan;
+        }
+
+        private static string[] GetRelationshipNames(IEnumerable<Expression<Func<T, object?>>> relationships, string methodName)
+        {
+            if (relationships == null)
+            {
+                throw new ArgumentNullException(nameof(relationships));
+            }
+
+            Expression<Func<T, object?>>[] expressions = relationships.ToArray();
+
+            if (expressions.Length == 0)
+            {
+                throw new ArgumentException($"{methodName} requires at least one relationship.", nameof(relationships));
+            }
+
+            return expressions.Select(expression => RelationshipExpression.GetProperty(expression, typeof(T)).Name).ToArray();
+        }
+
+
+
+        // Helpers
         private static string GetRequiredPrimaryKeyName()
         {
             string? primaryKey = QueryBuilder<T>.GetPrimaryKey();
@@ -1584,7 +2133,7 @@ namespace DapperGlib
              * ============================================================
              */
 
-            Dictionary<string, PropertyInfo> modelProperties = typeof(T).GetProperties().ToDictionary(property => property.Name,  property => property, StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PropertyInfo> modelProperties = typeof(T).GetProperties().ToDictionary(property => property.Name, property => property, StringComparer.OrdinalIgnoreCase);
 
             foreach (PropertyInfo property in properties)
             {
@@ -1597,7 +2146,7 @@ namespace DapperGlib
                 }
 
 
-                if (string.Equals(modelProperty.Name,  primaryAttribute.Name, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(modelProperty.Name, primaryAttribute.Name, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new ArgumentException(
                         $"Primary key '{primaryAttribute.Name}' " +
@@ -1607,7 +2156,7 @@ namespace DapperGlib
                 }
 
 
-                if (!Attribute.IsDefined(modelProperty,typeof(Fillable)))
+                if (!Attribute.IsDefined(modelProperty, typeof(Fillable)))
                 {
                     throw new QueryBuilderException(
                         $"Property '{modelProperty.Name}' is not marked " +
@@ -1623,7 +2172,7 @@ namespace DapperGlib
 
             foreach (PropertyInfo property in properties)
             {
-                parameters.Add(property.Name, property.GetValue(args,null));
+                parameters.Add(property.Name, property.GetValue(args, null));
             }
 
             parameters.Add(primaryAttribute.Name, primaryKeyValue);
