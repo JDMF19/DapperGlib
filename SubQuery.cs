@@ -488,6 +488,87 @@ namespace DapperGlib
         }
 
 
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas<TRelationship>(GetHasManyRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas<TRelationship>(GetSingleRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetHasManyRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> WhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereHas(GetSingleRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas<TRelationship>(GetHasManyRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas<TRelationship>(GetSingleRelationshipName(relationship), comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetHasManyRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> OrWhereHas<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>> builder, string comparisonOperator, int value) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereHas(GetSingleRelationshipName(relationship), builder, comparisonOperator, value);
+        }
+
+        public SubQuery<TModel> WhereDoesntHave<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereDoesntHave(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> WhereDoesntHave<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return WhereDoesntHave(GetSingleRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> OrWhereDoesntHave<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereDoesntHave(GetHasManyRelationshipName(relationship), builder);
+        }
+
+        public SubQuery<TModel> OrWhereDoesntHave<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship, Func<SubQuery<TRelationship>, SubQuery<TRelationship>>? builder = null) where TRelationship : Model<TRelationship>, new()
+        {
+            return OrWhereDoesntHave(GetSingleRelationshipName(relationship), builder);
+        }
+
+
         public SubQuery<TModel> When(bool Condition, Func<SubQuery<TModel>, SubQuery<TModel>>? Builder = null)
         {
             InitWhen(Condition, Builder);

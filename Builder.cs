@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using DapperGlib.Relationships;
+using System.Linq.Expressions;
 
 namespace DapperGlib
 {
@@ -1142,6 +1143,43 @@ namespace DapperGlib
             }, cancellationToken).ConfigureAwait(false);
         }
 
+
+
+        protected static string GetHasManyRelationshipName<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship) where TRelationship : Model<TRelationship>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind != RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as '{definition.Kind}' and cannot be used as a collection relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelationship))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
+            }
+
+            return definition.Name;
+        }
+
+        protected static string GetSingleRelationshipName<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship) where TRelationship : Model<TRelationship>, new()
+        {
+            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
+            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
+
+            if (definition.Kind == RelationshipKind.HasMany)
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as 'HasMany' and cannot be used as a single relationship.");
+            }
+
+            if (definition.RelatedType != typeof(TRelationship))
+            {
+                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
+            }
+
+            return definition.Name;
+        }
 
         internal static string FormatParameterForSql(object? value)
         {

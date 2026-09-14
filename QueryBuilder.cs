@@ -3000,42 +3000,6 @@ namespace DapperGlib
             return property.Name;
         }
 
-        private static string GetHasManyRelationshipName<TRelationship>(Expression<Func<TModel, IEnumerable<TRelationship>>> relationship) where TRelationship : Model<TRelationship>, new()
-        {
-            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
-            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
-
-            if (definition.Kind != RelationshipKind.HasMany)
-            {
-                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as '{definition.Kind}' and cannot be used as a collection relationship.");
-            }
-
-            if (definition.RelatedType != typeof(TRelationship))
-            {
-                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
-            }
-
-            return definition.Name;
-        }
-
-        private static string GetSingleRelationshipName<TRelationship>(Expression<Func<TModel, TRelationship?>> relationship) where TRelationship : Model<TRelationship>, new()
-        {
-            PropertyInfo property = RelationshipExpression.GetProperty(relationship, typeof(TModel));
-            RelationshipDefinition definition = RelationshipMetadataCache.GetRequired(typeof(TModel), property.Name);
-
-            if (definition.Kind == RelationshipKind.HasMany)
-            {
-                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' is configured as 'HasMany' and cannot be used as a single relationship.");
-            }
-
-            if (definition.RelatedType != typeof(TRelationship))
-            {
-                throw new RelationshipException($"Relationship '{definition.Name}' on model '{typeof(TModel).Name}' points to '{definition.RelatedType.Name}', but the requested relationship type is '{typeof(TRelationship).Name}'.");
-            }
-
-            return definition.Name;
-        }
-
 
         internal void AddClause(Clauses Clause)
         {

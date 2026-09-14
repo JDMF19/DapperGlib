@@ -15,7 +15,28 @@ Version **1.5.0** builds on the 1.4.5 async and DB API foundation and adds batch
 
 Version **1.6.0** introduces metadata-based model relationships with `[HasMany]`, `[HasOne]` and `[BelongsTo]`, eager loading through `With()`, nested relationships, constrained eager loading, relationship load tracking, `Load` / `LoadMissing`, `Chaperone`, metadata-based `WhereHas`, relationship projections such as `WithCount`, `WithExists`, `WithSum`, `WithAvg`, `WithMin` and `WithMax`, and strongly typed lambda overloads for the Where API. The eager-loading engine uses grouped secondary queries instead of automatic JOINs so parent rows are not multiplied by `HasMany` cardinality.
 
-DapperGlib 1.6.0 provides targets for:
+### Breaking change in 1.6.1
+
+> **DapperGlib 1.6.1 removes support for the legacy relationship API.**
+>
+> The previous `Relationship<T>` and `HasRelationship(...)` APIs are no longer available.
+> Applications using the pre-1.6 relationship syntax must migrate their models before upgrading to 1.6.1.
+>
+> Relationships must now be declared using `[HasMany]`, `[HasOne]` or `[BelongsTo]`.
+> Manual relationship queries must use `Relation()`.
+>
+> Example:
+>
+> ```csharp
+> [HasMany(nameof(UserId))]
+> public List<Post> Posts { get; set; } = new();
+>
+> List<Post> posts = user
+>     .Relation(x => x.Posts)
+>     .ToList();
+> ```
+
+DapperGlib 1.6.1 provides targets for:
 
 - .NET 6.0
 - .NET 8.0
@@ -38,10 +59,10 @@ Install-Package DapperGlib
 dotnet add package DapperGlib
 ```
 
-For version 1.6.0:
+For the latest version:
 
 ```bash
-dotnet add package DapperGlib --version 1.6.0
+dotnet add package DapperGlib --version 1.6.1
 ```
 
 ### Configuration
@@ -374,11 +395,12 @@ List<int> userIds = User.Where("Active", true).Pluck<int>("UserId");
 List<string> emails = User.Where("Active", true).Pluck<string>("Email");
 ```
 
-`Value<T>()` and `Pluck<T>()` can also be used after relationship queries because relationships inherit from the Query Builder.
+`Value<T>()` and `Pluck<T>()` can also be used after metadata relationship queries created with `Relation()`, because `Relation()` returns a relationship query built on top of the Query Builder.
 
 ```C#
-List<int> commentIds = user.Comments
-    .Where("Likes", ">", 10)
+List<int> commentIds = user
+    .Relation(x => x.Comments)
+    .Where(x => x.Likes, ">", 10)
     .Pluck<int>("CommentId");
 ```
 
@@ -866,10 +888,11 @@ var users = await User
     .ToListAsync();
 ```
 
-and from relationships:
+and from metadata relationship queries:
 
 ```C#
-var comments = await user.Comments
+var comments = await user
+    .Relation(x => x.Comments)
     .Timeout(5)
     .ToListAsync();
 ```
@@ -1508,14 +1531,15 @@ Metadata-driven relationships that require related SQL execution must use the sa
 
 Inside a DapperGlib transaction, relationship queries participate in the same ambient execution context when they use the same connection key.
 
-### #Legacy Relationship<T> API
+### #Removed Legacy Relationship<T> API
 
-The pre-1.6 `Relationship<T>` API remains available for existing direct/manual relationship code such as relationship queries and related-model creation/deletion.
+> **DapperGlib 1.6.0 does not support the pre-1.6 `Relationship<T>` API.**
 
-Example legacy relationship:
+The following legacy pattern is no longer valid and must not be used:
 
 ```C#
-public Relationship<Post> PostsLegacy =>
+// NOT SUPPORTED IN 1.6.0
+public Relationship<Post> Posts =>
     HasRelationship(
         new Relationship<Post>(
             localKey: "UserId",
@@ -1524,9 +1548,23 @@ public Relationship<Post> PostsLegacy =>
     );
 ```
 
-However, the new metadata-driven 1.6 features are based on navigation properties decorated with `[HasMany]`, `[HasOne]` or `[BelongsTo]`. A legacy `Relationship<T>` property is not used as metadata by `With`, `WithCount`, `WithExists`, relationship aggregates or the strongly typed metadata APIs.
+`Relationship<T>` and `HasRelationship(...)` have been replaced by metadata-based navigation properties. Define relationships with `[HasMany]`, `[HasOne]` or `[BelongsTo]`:
 
-For new code, prefer navigation properties and the 1.6 relationship metadata system.
+```C#
+[HasMany(nameof(UserId))]
+public List<Post> Posts { get; set; } = new();
+```
+
+For manual relationship queries, use `Relation()`:
+
+```C#
+List<Post> posts = user
+    .Relation(x => x.Posts)
+    .Where(x => x.Published, true)
+    .ToList();
+```
+
+Applications upgrading from DapperGlib 1.5.x or earlier must migrate every `Relationship<T>` property before upgrading to 1.6.0. Legacy relationship declarations are not interpreted as metadata and are not part of the supported public API.
 
 ## DB API
 
@@ -1971,7 +2009,7 @@ Version **1.6.0** focuses on relationships, eager loading and safer fluent query
 - Added `Chaperone` for reusing the loaded parent instance on inverse `BelongsTo` navigation properties.
 - Added metadata-driven `Relation()` for manual relationship queries.
 - Added strongly typed lambda overloads for `WhereHas`, `OrWhereHas`, `WhereDoesntHave` and `OrWhereDoesntHave`.
-- Reworked `WithCount()` to use relationship metadata instead of parsing legacy relationship SQL.
+- Reworked `WithCount()` to use relationship metadata, replacing the pre-1.6 relationship SQL parsing approach.
 - Added `WithExists()`.
 - Added `WithSum`, `WithAvg`, `WithMin` and `WithMax` relationship projections.
 - Added shared relationship projection handling with alias validation, parameterized constraints and connection-key isolation.
@@ -1980,15 +2018,46 @@ Version **1.6.0** focuses on relationships, eager loading and safer fluent query
 - Preserved parameterized SQL generation and `ToSql()` / `ToParameterizedSql()` inspection support.
 - Evaluated Dapper Multi-Mapping for automatic eager loading; grouped secondary queries remain the default relationship loading strategy.
 
+
+
+### #Migration From 1.6.0 To 1.6.1
+
+Version 1.6.1 contains a breaking change to the relationship API.
+
+The legacy `Relationship<T>` and `HasRelationship(...)` APIs have been removed.
+
+Code written using the old syntax:
+
+```csharp
+public Relationship<Post> Posts =>
+    HasRelationship(
+        new Relationship<Post>(
+            "UserId",
+            "UserId"
+        )
+    );
+```
+
+must be migrated to the metadata-based relationship system:
+
+```
+
+[HasMany(nameof(UserId))]
+public List<Post> Posts { get; set; } = new();
+
+```
+
+
 ### #Migration From 1.5.x To 1.6.0
 
-Version 1.6.0 keeps the existing Query Builder and DB APIs, but introduces a new relationship model for eager loading and metadata-driven relationship features.
+Version 1.6.0 keeps the existing Query Builder and DB APIs, but relationship declarations include a breaking change: the pre-1.6 `Relationship<T>` / `HasRelationship(...)` API is no longer supported. Relationships must be migrated to metadata-based navigation properties before upgrading.
 
-#### Legacy relationship definition
+#### Legacy relationship definition — no longer supported
 
-Before 1.6, relationship properties were commonly defined as query objects:
+Before 1.6, relationship properties were commonly defined as query objects. This syntax must be migrated and will not be supported by 1.6.0:
 
 ```C#
+// PRE-1.6 SYNTAX - NOT SUPPORTED IN 1.6.0
 public Relationship<Post> Posts =>
     HasRelationship(
         new Relationship<Post>(
@@ -2000,7 +2069,7 @@ public Relationship<Post> Posts =>
 
 #### 1.6 navigation relationship
 
-For the new eager-loading and metadata APIs, use a navigation property:
+Replace the legacy relationship property with a metadata navigation property:
 
 ```C#
 [HasMany(nameof(UserId))]
@@ -2023,7 +2092,7 @@ public List<Post> Posts { get; set; } = new();
 
 #### Manual queries
 
-Legacy code may continue using the legacy relationship property. New metadata relationships can be queried manually through `Relation()`:
+Legacy relationship properties cannot be queried in 1.6.0. After migrating the relationship to a metadata navigation property, use `Relation()` for manual relationship queries:
 
 ```C#
 List<Post> posts = user
@@ -2058,7 +2127,7 @@ User.Where(x => x.UserId, 10).First();
 
 #### WithCount migration
 
-`WithCount()` in 1.6 resolves relationship metadata. A legacy `Relationship<T>` property is no longer the relationship source for this API.
+`WithCount()` in 1.6 resolves relationship metadata. Because `Relationship<T>` is no longer supported, the relationship must be declared with `[HasMany]`, `[HasOne]` or `[BelongsTo]` before it can be used by `WithCount()`.
 
 Use:
 
@@ -2071,11 +2140,13 @@ public List<Post> Posts { get; set; } = new();
 var users = User.WithCount(x => x.Posts).ToList();
 ```
 
-### #1.6 Compatibility Notes
+> **Upgrade requirement:** before moving an application from 1.5.x to 1.6.0, replace all `Relationship<T>` declarations and all direct calls based on those relationship objects. Use metadata navigation properties plus `Relation()`, `With()`, `WhereHas()` and the other metadata-driven APIs instead.
+
+### #1.6.1 Compatibility Notes
 
 - Existing string-based Where APIs remain available.
 - Existing DB, Raw SQL, Stored Procedure and transaction APIs remain available.
-- The legacy `Relationship<T>` API remains available for compatible manual relationship operations.
+- The pre-1.6 `Relationship<T>` / `HasRelationship(...)` API is **not supported** and must be migrated to metadata-based navigation properties.
 - Metadata-based eager loading and relationship projections require `[HasMany]`, `[HasOne]` or `[BelongsTo]` navigation properties.
 - `With()` does not switch queries to automatic JOINs; related data is loaded with grouped secondary queries.
 - `Distinct()` cannot be combined with relationship projections such as `WithCount`, `WithExists` or relationship aggregates.

@@ -1626,26 +1626,6 @@ namespace DapperGlib
             return Builder;
         }
 
-        public Relationship<TRelationship> HasRelationship<TRelationship>(Relationship<TRelationship> relationship)
-        {
-            PropertyInfo? localProperty = this.GetType().GetProperty(relationship.LocalKey);
-
-            if (localProperty == null)
-            {
-                throw new RelationshipException(
-                    $"Relationship configuration error on model '{GetType().Name}'. " +
-                    $"Local key property '{relationship.LocalKey}' was not found."
-                );
-            }
-
-            var localValue = localProperty.GetValue(this);
-
-            relationship.Bind(localValue);
-
-            return relationship;
-        }
-
-
 
         public RelationshipQuery<TRelated> Relation<TRelated>(Expression<Func<T, IEnumerable<TRelated>>> relationship) where TRelated : Model<TRelated>, new()
         {
